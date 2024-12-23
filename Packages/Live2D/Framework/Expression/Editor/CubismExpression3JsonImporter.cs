@@ -160,15 +160,15 @@ namespace Live2D.Cubism.Editor.Importers
         /// </summary>
         /// <param name="importer">Event source.</param>
         /// <param name="model">Imported model.</param>
-        private static void OnModelImport(CubismModel3JsonImporter importer, CubismModel model)
+        private static void OnModelImport(CubismImporter.ModelImportContext ctx, CubismModel model)
         {
             var expressionController = model.GetComponent<CubismExpressionController>();
-            if (expressionController == null || importer.Model3Json.FileReferences.Expressions == null)
+            if (expressionController == null || ctx.Model3Json.FileReferences.Expressions == null)
             {
                 return;
             }
 
-            var modelDir = Path.GetDirectoryName(importer.AssetPath).Replace("\\","/");
+            var modelDir = Path.GetDirectoryName(ctx.AssetPath).Replace("\\","/");
             var modelName = Path.GetFileName(modelDir);
             var expressionListPath = modelDir + "/" + modelName + ".expressionList.asset";
 

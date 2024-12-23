@@ -20,6 +20,7 @@ namespace Live2D.Cubism.Core
     /// <summary>
     /// Cubism moc asset.
     /// </summary>
+    [PreferBinarySerialization]
     public sealed class CubismMoc : ScriptableObject
     {
         #region Factory Methods
@@ -48,10 +49,7 @@ namespace Live2D.Cubism.Core
             }
 
             var moc = CreateInstance<CubismMoc>();
-
-
-            moc.Bytes = moc3;
-
+            moc._bytes = moc3;
 
             return moc;
         }
@@ -84,18 +82,8 @@ namespace Live2D.Cubism.Core
         /// <summary>
         /// <see cref="Bytes"/> backing field.
         /// </summary>
-        [SerializeField]
+        [SerializeField,HideInInspector]
         private byte[] _bytes;
-
-        /// <summary>
-        /// Raw moc bytes.
-        /// </summary>
-        private byte[] Bytes
-        {
-            get { return _bytes; }
-            set { _bytes = value; }
-        }
-
 
         private CubismUnmanagedMoc UnmanagedMoc { get; set; }
 
@@ -185,14 +173,13 @@ namespace Live2D.Cubism.Core
 
 
             // Return if no bytes are available.
-            if (Bytes == null)
+            if (_bytes == null)
             {
                 return;
             }
 
-
             // Try revive.
-            UnmanagedMoc = CubismUnmanagedMoc.FromBytes(Bytes);
+            UnmanagedMoc = CubismUnmanagedMoc.FromBytes(_bytes);
         }
 
         public uint Version

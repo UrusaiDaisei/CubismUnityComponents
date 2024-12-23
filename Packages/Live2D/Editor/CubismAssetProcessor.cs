@@ -47,7 +47,7 @@ namespace Live2D.Cubism.Editor
         /// <param name="deletedAssetPaths">Paths of removed assets.</param>
         /// <param name="movedAssetPaths">Paths of moved assets</param>
         /// <param name="movedFromAssetPaths">Paths of moved assets before moving</param>
-        private static void OnPostprocessAllAssets(
+        private static void OnPostprocessAllAssets_old(
             string[] importedAssetPaths,
             string[] deletedAssetPaths,
             string[] movedAssetPaths,

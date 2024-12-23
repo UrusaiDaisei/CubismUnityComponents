@@ -204,20 +204,6 @@ namespace Live2D.Cubism.Framework.Json
         #endregion
 
         /// <summary>
-        /// The contents of the referenced moc3 asset.
-        /// </summary>
-        /// <remarks>
-        /// The contents isn't cached internally.
-        /// </remarks>
-        public byte[] Moc3
-        {
-            get
-            {
-                return LoadReferencedAsset<byte[]>(FileReferences.Moc);
-            }
-        }
-
-        /// <summary>
         /// <see cref="CubismPose3Json"/> backing field.
         /// </summary>
         [NonSerialized]
@@ -356,37 +342,14 @@ namespace Live2D.Cubism.Framework.Json
         #endregion
 
         /// <summary>
-        /// Instantiates a <see cref="CubismMoc">model source</see> and a <see cref="CubismModel">model</see> with the default texture set.
-        /// </summary>
-        /// <param name="shouldImportAsOriginalWorkflow">Should import as original workflow.</param>
-        /// <returns>The instantiated <see cref="CubismModel">model</see> on success; <see langword="null"/> otherwise.</returns>
-        public CubismModel ToModel(bool shouldImportAsOriginalWorkflow = false)
-        {
-            return ToModel(CubismBuiltinPickers.MaterialPicker, CubismBuiltinPickers.TexturePicker, shouldImportAsOriginalWorkflow);
-        }
-
-        /// <summary>
         /// Instantiates a <see cref="CubismMoc">model source</see> and a <see cref="CubismModel">model</see>.
         /// </summary>
         /// <param name="pickMaterial">The material mapper to use.</param>
         /// <param name="pickTexture">The texture mapper to use.</param>
         /// <param name="shouldImportAsOriginalWorkflow">Should import as original workflow.</param>
         /// <returns>The instantiated <see cref="CubismModel">model</see> on success; <see langword="null"/> otherwise.</returns>
-        public CubismModel ToModel(MaterialPicker pickMaterial, TexturePicker pickTexture, bool shouldImportAsOriginalWorkflow = false)
+        public CubismModel ToModel(CubismMoc moc, MaterialPicker pickMaterial, TexturePicker pickTexture, bool shouldImportAsOriginalWorkflow = false)
         {
-            // Initialize model source and instantiate it.
-            var mocAsBytes = Moc3;
-
-
-            if (mocAsBytes == null)
-            {
-                return null;
-            }
-
-
-            var moc = CubismMoc.CreateFrom(mocAsBytes);
-
-
             var model = CubismModel.InstantiateFrom(moc);
 
             if (model == null)
@@ -395,7 +358,6 @@ namespace Live2D.Cubism.Framework.Json
             }
 
             model.name = Path.GetFileNameWithoutExtension(FileReferences.Moc);
-
 
 #if UNITY_EDITOR
             // Add parameters and parts inspectors.
@@ -464,54 +426,6 @@ namespace Live2D.Cubism.Framework.Json
             //Load from cdi3.json
             var DisplayInfo3JsonAsString = DisplayInfo3Json;
             var cdi3Json = CubismDisplayInfo3Json.LoadFrom(DisplayInfo3JsonAsString);
-
-            // Initialize groups.
-            var parameters = model.Parameters;
-
-            for (var i = 0; i < parameters.Length; ++i)
-            {
-                if (IsParameterInGroup(parameters[i], "EyeBlink"))
-                {
-                    if (model.gameObject.GetComponent<CubismEyeBlinkController>() == null)
-                    {
-                        model.gameObject.AddComponent<CubismEyeBlinkController>();
-                    }
-
-
-                    parameters[i].gameObject.AddComponent<CubismEyeBlinkParameter>();
-                }
-
-
-                // Set up mouth parameters.
-                if (IsParameterInGroup(parameters[i], "LipSync"))
-                {
-                    if (model.gameObject.GetComponent<CubismMouthController>() == null)
-                    {
-                        model.gameObject.AddComponent<CubismMouthController>();
-                    }
-
-
-                    parameters[i].gameObject.AddComponent<CubismMouthParameter>();
-                }
-
-
-                // Setting up the parameter name for display.
-                if (cdi3Json != null)
-                {
-                    var cubismDisplayInfoParameterName = parameters[i].gameObject.AddComponent<CubismDisplayInfoParameterName>();
-                    cubismDisplayInfoParameterName.Name = parameters[i].Id;
-                    for (int j = 0; j < cdi3Json.Parameters.Length; j++)
-                    {
-                        if (cdi3Json.Parameters[j].Id == parameters[i].Id)
-                        {
-                            cubismDisplayInfoParameterName.Name = cdi3Json.Parameters[j].Name;
-                            break;
-                        }
-                    }
-                    cubismDisplayInfoParameterName.DisplayName = string.Empty;
-                }
-            }
-
             if (cdi3Json != null)
             {
                 // Setting up the part name for display.
@@ -566,6 +480,43 @@ namespace Live2D.Cubism.Framework.Json
                 }
             }
 
+            // Initialize groups.
+            var parameters = model.Parameters;
+
+            for (var i = 0; i < parameters.Length; ++i)
+            {
+                if (IsParameterInGroup(parameters[i], "EyeBlink"))
+                {
+                    model.gameObject.GetOrAddComponent<CubismEyeBlinkController>();
+                    parameters[i].gameObject.AddComponent<CubismEyeBlinkParameter>();
+                }
+
+
+                // Set up mouth parameters.
+                if (IsParameterInGroup(parameters[i], "LipSync"))
+                {
+                    model.gameObject.GetOrAddComponent<CubismMouthController>();
+                    parameters[i].gameObject.AddComponent<CubismMouthParameter>();
+                }
+
+
+                // Setting up the parameter name for display.
+                if (cdi3Json != null)
+                {
+                    var cubismDisplayInfoParameterName = parameters[i].gameObject.AddComponent<CubismDisplayInfoParameterName>();
+                    cubismDisplayInfoParameterName.Name = parameters[i].Id;
+                    for (int j = 0; j < cdi3Json.Parameters.Length; j++)
+                    {
+                        if (cdi3Json.Parameters[j].Id == parameters[i].Id)
+                        {
+                            cubismDisplayInfoParameterName.Name = cdi3Json.Parameters[j].Name;
+                            break;
+                        }
+                    }
+                    cubismDisplayInfoParameterName.DisplayName = string.Empty;
+                }
+            }
+
             // Add mask controller if required.
             for (var i = 0; i < drawables.Length; ++i)
             {
@@ -574,10 +525,8 @@ namespace Live2D.Cubism.Framework.Json
                     continue;
                 }
 
-
                 // Add controller exactly once...
                 model.gameObject.AddComponent<CubismMaskController>();
-
 
                 break;
             }
@@ -586,71 +535,31 @@ namespace Live2D.Cubism.Framework.Json
             if(shouldImportAsOriginalWorkflow)
             {
                 // Add cubism update manager.
-                var updateManager = model.gameObject.GetComponent<CubismUpdateController>();
-
-                if(updateManager == null)
-                {
-                    model.gameObject.AddComponent<CubismUpdateController>();
-                }
-
+                var updateManager = model.gameObject.GetOrAddComponent<CubismUpdateController>();
                 // Add parameter store.
-                var parameterStore = model.gameObject.GetComponent<CubismParameterStore>();
-
-                if(parameterStore == null)
-                {
-                    parameterStore = model.gameObject.AddComponent<CubismParameterStore>();
-                }
+                var parameterStore = model.gameObject.GetOrAddComponent<CubismParameterStore>();
 
                 // Add pose controller.
-                var poseController = model.gameObject.GetComponent<CubismPoseController>();
-
-                if(poseController == null)
-                {
-                    poseController = model.gameObject.AddComponent<CubismPoseController>();
-                }
+                var poseController = model.gameObject.GetOrAddComponent<CubismPoseController>();
 
                 // Add expression controller.
-                var expressionController = model.gameObject.GetComponent<CubismExpressionController>();
-
-                if(expressionController == null)
-                {
-                    expressionController = model.gameObject.AddComponent<CubismExpressionController>();
-                }
-
+                var expressionController = model.gameObject.GetOrAddComponent<CubismExpressionController>();
 
                 // Add fade controller.
-                var motionFadeController = model.gameObject.GetComponent<CubismFadeController>();
-
-                if(motionFadeController == null)
-                {
-                    motionFadeController = model.gameObject.AddComponent<CubismFadeController>();
-                }
-
+                var motionFadeController = model.gameObject.GetOrAddComponent<CubismFadeController>();
             }
-
 
             // Initialize physics if JSON exists.
             var physics3JsonAsString = Physics3Json;
 
-
             if (!string.IsNullOrEmpty(physics3JsonAsString))
             {
                 var physics3Json = CubismPhysics3Json.LoadFrom(physics3JsonAsString);
-                var physicsController = model.gameObject.GetComponent<CubismPhysicsController>();
-
-                if (physicsController == null)
-                {
-                    physicsController = model.gameObject.AddComponent<CubismPhysicsController>();
-
-                }
-
+                var physicsController = model.gameObject.GetOrAddComponent<CubismPhysicsController>();
                 physicsController.Initialize(physics3Json.ToRig());
             }
 
-
             var userData3JsonAsString = UserData3Json;
-
-
             if (!string.IsNullOrEmpty(userData3JsonAsString))
             {
                 var userData3Json = CubismUserData3Json.LoadFrom(userData3JsonAsString);
@@ -664,25 +573,13 @@ namespace Live2D.Cubism.Framework.Json
 
                     if (index >= 0)
                     {
-                        var tag = drawables[i].gameObject.GetComponent<CubismUserDataTag>();
-
-
-                        if (tag == null)
-                        {
-                            tag = drawables[i].gameObject.AddComponent<CubismUserDataTag>();
-                        }
-
-
+                        var tag = drawables[i].gameObject.GetOrAddComponent<CubismUserDataTag>();
                         tag.Initialize(drawableBodies[index]);
                     }
                 }
             }
 
-            if (model.gameObject.GetComponent<Animator>() == null)
-            {
-                model.gameObject.AddComponent<Animator>();
-            }
-
+            model.gameObject.GetOrAddComponent<Animator>();
             // Make sure model is 'fresh'
             model.ForceUpdateNow();
 

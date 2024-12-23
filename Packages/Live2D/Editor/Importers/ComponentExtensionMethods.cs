@@ -22,17 +22,13 @@ namespace Live2D.Cubism.Editor.Importers
         public static Component GetOrAddComponent(this Component self, Type type)
         {
             var component = self.GetComponent(type);
-
-
             if (component != null)
             {
                 return component;
             }
 
-
             return self.gameObject.AddComponent(type);
         }
-
 
         /// <summary>
         /// Checks whether a component should be moved on reimport.

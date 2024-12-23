@@ -68,7 +68,7 @@ namespace Live2D.Cubism.Core
 
 
             // Initialize it by resetting it.
-            model.Reset(moc);
+            model.ResetMoc(moc);
 
 
             return model;
@@ -266,14 +266,14 @@ namespace Live2D.Cubism.Core
             }
 
 
-            Reset(Moc);
+            ResetMoc(Moc);
         }
 
         /// <summary>
         /// Initializes instance for first use.
         /// </summary>
         /// <param name="moc">Moc to instantiate from.</param>
-        private void Reset(CubismMoc moc)
+        private void ResetMoc(CubismMoc moc)
         {
             Moc = moc;
             name = moc.name;

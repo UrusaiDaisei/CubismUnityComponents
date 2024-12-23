@@ -44,11 +44,11 @@ namespace Live2D.Cubism.Editor.Importers
         /// </summary>
         /// <param name="sender">Event source.</param>
         /// <param name="model">Imported model.</param>
-        private static void OnModelImport(CubismModel3JsonImporter sender, CubismModel model)
+        private static void OnModelImport(CubismImporter.ModelImportContext ctx, CubismModel model)
         {
             var shouldImportAsOriginalWorkflow = CubismUnityEditorMenu.ShouldImportAsOriginalWorkflow;
             var shouldClearAnimationCurves = CubismUnityEditorMenu.ShouldClearAnimationCurves;
-            var pose3Json = sender.Model3Json.Pose3Json;
+            var pose3Json = ctx.Model3Json.Pose3Json;
 
             // Fail silently...
             if(!shouldImportAsOriginalWorkflow || pose3Json == null)
@@ -57,8 +57,8 @@ namespace Live2D.Cubism.Editor.Importers
             }
 
             var assetsDirectoryPath = Application.dataPath.Replace("Assets", "");
-            var assetPath = sender.AssetPath.Replace(assetsDirectoryPath, "");
-            var fileReferences = sender.Model3Json.FileReferences;
+            var assetPath = ctx.AssetPath.Replace(assetsDirectoryPath, "");
+            var fileReferences = ctx.Model3Json.FileReferences;
 
             // Create pose animation clip
             var motions = new List<CubismModel3Json.SerializableMotion>();

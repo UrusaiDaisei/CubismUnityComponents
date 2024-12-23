@@ -43,10 +43,20 @@ namespace Live2D.Cubism.Framework.MotionFade
         /// </summary>
         /// <param name="importer">Event source.</param>
         /// <param name="model">Imported model.</param>
-        private static void OnModelImport(CubismModel3JsonImporter importer, CubismModel model)
+        private static void OnModelImport(CubismImporter.ModelImportContext ctx, CubismModel model)
         {
+            var modelDir = Path.GetDirectoryName(ctx.AssetPath).Replace("\\", "/");
+            var modelName = Path.GetFileName(modelDir);
+            var fadeMotionListPath = modelDir + "/" + modelName + ".fadeMotionList.asset";
+
+            var fadeMotions = GetFadeMotionList(fadeMotionListPath);
+            if (fadeMotions == null)
+            {
+                return;
+            }
+
             var dataPath = Directory.GetParent(Application.dataPath).FullName + "/";
-            var assetPath = importer.AssetPath.Replace(".model3.json", ".controller");
+            var assetPath = ctx.AssetPath.Replace(".model3.json", ".controller");
 
             var animator = model.GetComponent<Animator>();
 
@@ -78,25 +88,14 @@ namespace Live2D.Cubism.Framework.MotionFade
             }
 
             var fadeController = model.GetComponent<CubismFadeController>();
-            if (importer.Model3Json.FileReferences.Motions.Motions == null || fadeController == null)
-            {
-                return;
-            }
-
-            var modelDir = Path.GetDirectoryName(importer.AssetPath).Replace("\\", "/");
-            var modelName = Path.GetFileName(modelDir);
-            var fadeMotionListPath = modelDir + "/" + modelName + ".fadeMotionList.asset";
-
-            var fadeMotions = GetFadeMotionList(fadeMotionListPath);
-
-            if (fadeMotions == null)
+            if (ctx.Model3Json.FileReferences.Motions.Motions == null || fadeController == null)
             {
                 return;
             }
 
             fadeController.CubismFadeMotionList = fadeMotions;
 
-            var fileReferences = importer.Model3Json.FileReferences;
+            var fileReferences = ctx.Model3Json.FileReferences;
 
             // Create pose animation clip
             var motions = new List<CubismModel3Json.SerializableMotion>();
@@ -182,7 +181,7 @@ namespace Live2D.Cubism.Framework.MotionFade
                 }
 
                 // Create fade motion.
-                CreateFadeMotionData(motionIndex, instanceId, fadeMotions, motionPath, motion3Json, animationClip, importer.Model3Json);
+                CreateFadeMotionData(motionIndex, instanceId, fadeMotions, motionPath, motion3Json, animationClip, ctx.Model3Json);
             }
         }
 

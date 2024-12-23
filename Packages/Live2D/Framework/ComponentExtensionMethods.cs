@@ -77,5 +77,14 @@ namespace Live2D.Cubism.Framework
 
             return components;
         }
+
+        public static T GetOrAddComponent<T>(this GameObject go) where T : Component
+        {
+            if (!go.TryGetComponent<T>(out var component))
+            {
+                component = go.AddComponent<T>();
+            }
+            return component;
+        }
     }
 }
