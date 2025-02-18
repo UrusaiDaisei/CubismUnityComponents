@@ -1,6 +1,7 @@
 *
 !*/
 !/[Pp]ackages/Live2D/**/*
+!/[Aa]ssets/[Ss]cripts/**/*
 /[Pp]ackages/Live2D/Plugins/**/*.a
 /[Pp]ackages/Live2D/Plugins/**/*.bc
 /[Pp]ackages/Live2D/Plugins/**/*.dll
