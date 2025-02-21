@@ -1,0 +1,30 @@
+.unity-inspector-element {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.unity-inspector-element__custom-inspector-container {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* In case we need to target the container more specifically */
+InspectorElement.unity-inspector-element__custom-inspector-container {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.unity-base-field__label {
+    min-width: 150px;
+    padding-right: 8px;
+}
+
+.ctrl-pressed .parameter-label:hover {
+    cursor: zoom;
+    color: #2196F3;
+}
+
+.ctrl-pressed .parameter-label:hover:active {
+    cursor: zoom;
+    color: #1976D2;
+} 

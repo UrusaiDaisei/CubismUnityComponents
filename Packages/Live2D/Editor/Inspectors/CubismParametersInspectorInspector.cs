@@ -5,12 +5,11 @@
  * that can be found at https://www.live2d.com/eula/live2d-open-software-license-agreement_en.html.
  */
 
-
 using Live2D.Cubism.Core;
 using Live2D.Cubism.Framework;
 using UnityEditor;
 using UnityEngine;
-
+using UnityEngine.UIElements;
 
 namespace Live2D.Cubism.Editor.Inspectors
 {
@@ -20,124 +19,234 @@ namespace Live2D.Cubism.Editor.Inspectors
     [CustomEditor(typeof(CubismParametersInspector))]
     internal sealed class CubismParametersInspectorInspector : UnityEditor.Editor
     {
-        #region Editor
+        #region Fields
 
-        /// <summary>
-        /// Draws the inspector.
-        /// </summary>
-        public override void OnInspectorGUI()
+        private VisualElement _root;
+        private VisualElement _parametersContainer;
+
+        #endregion
+
+        #region Runtime
+
+        private CubismParameter[] Parameters { get; set; }
+        private string[] ParametersNameFromJson { get; set; }
+        private bool IsInitialized => Parameters != null;
+
+        #endregion
+
+        #region Unity Methods
+
+        public override VisualElement CreateInspectorGUI()
         {
-            // Lazily initialize.
-            if (!IsInitialized)
+            try 
             {
-                Initialize();
-            }
-
-
-            // Show parameters.
-            var didParametersChange = false;
-
-
-            for (var i = 0; i < Parameters.Length; i++)
-            {
-                EditorGUI.BeginChangeCheck();
-
-                var name = (string.IsNullOrEmpty(ParametersNameFromJson[i]))
-                    ? Parameters[i].Id
-                    : ParametersNameFromJson[i];
-
-                Parameters[i].Value = EditorGUILayout.Slider(
-                    name,
-                    Parameters[i].Value,
-                    Parameters[i].MinimumValue,
-                    Parameters[i].MaximumValue
-                    );
-
-
-                if (EditorGUI.EndChangeCheck())
+                var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+                    "Packages/com.live2d.cubism/Editor/Inspectors/CubismParametersInspectorInspector.uxml");
+                    
+                if (visualTree == null)
                 {
-                    EditorUtility.SetDirty(Parameters[i]);
-
-
-                    didParametersChange = true;
+                    Debug.LogError("Could not load UXML file for CubismParametersInspectorInspector.");
+                    return new Label("Error loading inspector. Check console for details.");
                 }
+                
+                _root = visualTree.CloneTree();
+                
+                ApplyStyles();
+                ConfigureScrollView();
+                InitializeControls();
+
+                return _root;
             }
-
-
-            // Show reset button.
-            var resetPosition = EditorGUILayout.GetControlRect();
-
-
-            resetPosition.width *= 0.25f;
-            resetPosition.x += (resetPosition.width*3f);
-
-
-            if (GUI.Button(resetPosition, "Reset"))
+            catch (System.Exception e)
             {
-                foreach (var parameter in Parameters)
-                {
-                    parameter.Value = parameter.DefaultValue;
-
-
-                    EditorUtility.SetDirty(parameter);
-                }
-
-
-                didParametersChange = true;
-            }
-
-
-            if (didParametersChange)
-            {
-                (target as Component)
-                    .FindCubismModel()
-                    .ForceUpdateNow();
+                Debug.LogError($"Error creating inspector GUI: {e}");
+                return new Label("Error loading inspector. Check console for details.");
             }
         }
 
         #endregion
 
-        /// <summary>
-        /// <see cref="CubismParameter"/>s cache.
-        /// </summary>
-        private CubismParameter[] Parameters { get; set; }
+        #region Internal Methods
 
-        /// <summary>
-        /// Array of <see cref="CubismDisplayInfoParameterName.Name"/> obtained from <see cref="CubismDisplayInfoParameterName"/>s.
-        /// </summary>
-        private string[] ParametersNameFromJson { get; set; }
-
-        /// <summary>
-        /// Gets whether <see langword="this"/> is initialized.
-        /// </summary>
-        private bool IsInitialized
+        private void ApplyStyles()
         {
-            get
+            var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(
+                "Packages/com.live2d.cubism/Editor/Inspectors/CubismParametersInspectorInspector.uss");
+            
+            if (styleSheet != null)
             {
-                return Parameters != null;
+                _root.styleSheets.Add(styleSheet);
             }
         }
 
+        private void ConfigureScrollView()
+        {
+            var scrollView = _root.Q<ScrollView>();
+            scrollView.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            scrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
+            scrollView.style.maxHeight = 400;
+        }
 
-        /// <summary>
-        /// Initializes <see langword="this"/>.
-        /// </summary>
+        private void InitializeControls()
+        {
+            _parametersContainer = _root.Q<VisualElement>("parameters-container");
+            var resetButton = _root.Q<Button>("reset-button");
+
+            _root.focusable=true;
+            _root.pickingMode=PickingMode.Position;
+            
+            // Register for mouse enter/leave at root level
+            _root.RegisterCallback<MouseEnterEvent>(evt => 
+            {
+                _root.Focus();
+                
+                if (!evt.ctrlKey) return;
+                _root.AddToClassList("ctrl-pressed");
+            });
+            
+            _root.RegisterCallback<MouseLeaveEvent>(evt => 
+            {
+                _root.RemoveFromClassList("ctrl-pressed");
+            });
+            
+            // Add Ctrl key handling at container level
+            _root.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (!evt.ctrlKey) return;
+                _root.AddToClassList("ctrl-pressed");
+            });
+            
+            _root.RegisterCallback<KeyUpEvent>(evt =>
+            {
+                if (!evt.ctrlKey) return;
+                _root.RemoveFromClassList("ctrl-pressed");
+            });
+
+            if (!IsInitialized)
+            {
+                Initialize();
+            }
+
+            CreateParameterControls();
+            resetButton.clicked += OnResetButtonClicked;
+        }
+
+        private void CreateParameterControls()
+        {
+            for (var i = 0; i < Parameters.Length; i++)
+            {
+                CreateParameterSlider(i);
+            }
+        }
+
+        private void CreateParameterSlider(int index)
+        {
+            var parameter = Parameters[index];
+            var name = string.IsNullOrEmpty(ParametersNameFromJson[index])
+                ? parameter.Id
+                : ParametersNameFromJson[index];
+
+            var slider = new Slider(name, parameter.MinimumValue, parameter.MaximumValue)
+            {
+                value = parameter.Value,
+                style = { marginLeft = 0 }
+            };
+
+            ConfigureSliderLabel(slider, index);
+            ConfigureSliderCallback(slider, index);
+
+            _parametersContainer.Add(slider);
+        }
+
+        private void ConfigureSliderLabel(Slider slider, int index)
+        {
+            var label = slider.Q<Label>();
+            
+            // Add a permanent tooltip
+            label.tooltip = "Ctrl+Click to highlight in hierarchy";
+            
+            // Add hover style class
+            label.AddToClassList("parameter-label");
+            
+            label.RegisterCallback<MouseDownEvent>(evt =>
+            {
+                if (!evt.ctrlKey) return;
+                
+                EditorGUIUtility.PingObject(Parameters[index]);
+                Selection.activeObject = Parameters[index];
+                evt.StopPropagation();
+            });
+        }
+
+        private void ConfigureSliderCallback(Slider slider, int index)
+        {
+            slider.RegisterValueChangedCallback(evt =>
+            {
+                Parameters[index].Value = evt.newValue;
+                EditorUtility.SetDirty(Parameters[index]);
+                UpdateModel();
+            });
+        }
+
+        #endregion
+
+        #region Event Handlers
+
+        private void OnResetButtonClicked()
+        {
+            foreach (var parameter in Parameters)
+            {
+                parameter.Value = parameter.DefaultValue;
+                EditorUtility.SetDirty(parameter);
+            }
+
+            UpdateSliderValues();
+            UpdateModel();
+        }
+
+        #endregion
+
+        #region Auxiliary Methods
+
+        private void UpdateSliderValues()
+        {
+            var sliders = _parametersContainer.Query<Slider>().ToList();
+            for (var i = 0; i < Parameters.Length; i++)
+            {
+                sliders[i].value = Parameters[i].DefaultValue;
+            }
+        }
+
+        private void UpdateModel()
+        {
+            (target as Component)
+                .FindCubismModel()
+                .ForceUpdateNow();
+        }
+
         private void Initialize()
         {
             Parameters = (target as Component)
                 .FindCubismModel(true)
                 .Parameters;
 
-            //Initializing the property of `ParametersNameFromJson `.
             ParametersNameFromJson = new string[Parameters.Length];
 
             for (var i = 0; i < Parameters.Length; i++)
             {
                 var displayInfoParameterName = Parameters[i].GetComponent<CubismDisplayInfoParameterName>();
-                ParametersNameFromJson[i] = displayInfoParameterName != null
-                    ? (string.IsNullOrEmpty(displayInfoParameterName.DisplayName) ? displayInfoParameterName.Name : displayInfoParameterName.DisplayName)
-                    : string.Empty;
+                if (displayInfoParameterName == null)
+                {
+                    ParametersNameFromJson[i] = string.Empty;
+                    continue;
+                }
+
+                ParametersNameFromJson[i] = string.IsNullOrEmpty(displayInfoParameterName.DisplayName)
+                    ? displayInfoParameterName.Name
+                    : displayInfoParameterName.DisplayName;
             }
         }
+
+        #endregion
     }
 }

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<engine:UXML
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:engine="UnityEngine.UIElements"
+    xmlns:editor="UnityEditor.UIElements">
+    
+    <engine:VisualElement style="flex-grow: 1;">
+        <engine:ScrollView style="flex-grow: 1;">
+            <engine:VisualElement name="parameters-container" style="flex-grow: 1; margin-right: 8px;">
+                <!-- Parameters will be added here dynamically -->
+            </engine:VisualElement>
+        </engine:ScrollView>
+        
+        <engine:VisualElement style="flex-direction: row-reverse; padding: 8px;">
+            <engine:Button text="Reset" name="reset-button" style="width: 60px;"/>
+        </engine:VisualElement>
+    </engine:VisualElement>
+    
+</engine:UXML> 
