@@ -17,7 +17,7 @@ namespace Live2D.Cubism.Framework
         /// <summary>
         /// Original name of the parameter from cdi3.json.
         /// </summary>
-        [SerializeField,HideInInspector]
+        [SerializeField, HideInInspector]
         public string Name;
 
         /// <summary>
@@ -30,6 +30,6 @@ namespace Live2D.Cubism.Framework
         /// Group name from cdi3.json.
         /// </summary>
         [SerializeField]
-        public string GroupName;
+        public string GroupId;
     }
 }

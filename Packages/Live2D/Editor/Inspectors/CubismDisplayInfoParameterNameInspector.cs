@@ -29,7 +29,7 @@ namespace Live2D.Cubism.Editor.Inspectors
 
             EditorGUI.BeginDisabledGroup(true);
             EditorGUILayout.TextField("Name", parameter.Name);
-            EditorGUILayout.TextField("Group", parameter.GroupName);
+            EditorGUILayout.TextField("Group", parameter.GroupId);
             EditorGUI.EndDisabledGroup();
 
             parameter.DisplayName = EditorGUILayout.TextField("Display Name", parameter.DisplayName);

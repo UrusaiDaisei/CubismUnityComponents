@@ -38,19 +38,19 @@ namespace Live2D.Cubism.Editor.Inspectors
 
         public override VisualElement CreateInspectorGUI()
         {
-            try 
+            try
             {
                 var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                     "Packages/com.live2d.cubism/Editor/Inspectors/CubismParametersInspectorInspector.uxml");
-                    
+
                 if (visualTree == null)
                 {
                     Debug.LogError("Could not load UXML file for CubismParametersInspectorInspector.");
                     return new Label("Error loading inspector. Check console for details.");
                 }
-                
+
                 _root = visualTree.CloneTree();
-                
+
                 ApplyStyles();
                 ConfigureScrollView();
                 InitializeControls();
@@ -72,7 +72,7 @@ namespace Live2D.Cubism.Editor.Inspectors
         {
             var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(
                 "Packages/com.live2d.cubism/Editor/Inspectors/CubismParametersInspectorInspector.uss");
-            
+
             if (styleSheet != null)
             {
                 _root.styleSheets.Add(styleSheet);
@@ -92,30 +92,30 @@ namespace Live2D.Cubism.Editor.Inspectors
             _parametersContainer = _root.Q<VisualElement>("parameters-container");
             var resetButton = _root.Q<Button>("reset-button");
 
-            _root.focusable=true;
-            _root.pickingMode=PickingMode.Position;
-            
+            _root.focusable = true;
+            _root.pickingMode = PickingMode.Position;
+
             // Register for mouse enter/leave at root level
-            _root.RegisterCallback<MouseEnterEvent>(evt => 
+            _root.RegisterCallback<MouseEnterEvent>(evt =>
             {
                 _root.Focus();
-                
+
                 if (!evt.ctrlKey) return;
                 _root.AddToClassList("ctrl-pressed");
             });
-            
-            _root.RegisterCallback<MouseLeaveEvent>(evt => 
+
+            _root.RegisterCallback<MouseLeaveEvent>(evt =>
             {
                 _root.RemoveFromClassList("ctrl-pressed");
             });
-            
+
             // Add Ctrl key handling at container level
             _root.RegisterCallback<KeyDownEvent>(evt =>
             {
                 if (!evt.ctrlKey) return;
                 _root.AddToClassList("ctrl-pressed");
             });
-            
+
             _root.RegisterCallback<KeyUpEvent>(evt =>
             {
                 if (!evt.ctrlKey) return;
@@ -161,17 +161,17 @@ namespace Live2D.Cubism.Editor.Inspectors
         private void ConfigureSliderLabel(Slider slider, int index)
         {
             var label = slider.Q<Label>();
-            
+
             // Add a permanent tooltip
             label.tooltip = "Ctrl+Click to highlight in hierarchy";
-            
+
             // Add hover style class
             label.AddToClassList("parameter-label");
-            
+
             label.RegisterCallback<MouseDownEvent>(evt =>
             {
                 if (!evt.ctrlKey) return;
-                
+
                 EditorGUIUtility.PingObject(Parameters[index]);
                 Selection.activeObject = Parameters[index];
                 evt.StopPropagation();

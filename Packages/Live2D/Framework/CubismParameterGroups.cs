@@ -17,4 +17,4 @@ namespace Live2D.Cubism.Framework
 
         public ParameterGroup[] Groups;
     }
-} 
+}
