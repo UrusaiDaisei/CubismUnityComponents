@@ -5,26 +5,30 @@
  * that can be found at https://www.live2d.com/eula/live2d-open-software-license-agreement_en.html.
  */
 
-
-using Live2D.Cubism.Core;
+// Framework-level imports
 using System;
 using System.IO;
-using Live2D.Cubism.Framework.MouthMovement;
-using Live2D.Cubism.Framework.Physics;
-using Live2D.Cubism.Framework.UserData;
-using Live2D.Cubism.Framework.Pose;
-using Live2D.Cubism.Framework.Expression;
-using Live2D.Cubism.Framework.MotionFade;
-using Live2D.Cubism.Framework.Raycasting;
-using Live2D.Cubism.Rendering;
-using Live2D.Cubism.Rendering.Masking;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
-using UnityEngine;
-using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.CompilerServices;
 
+// Cubism Core imports
+using Live2D.Cubism.Core;
+using Live2D.Cubism.Rendering;
+using Live2D.Cubism.Rendering.Masking;
+
+// Cubism Framework imports
+using Live2D.Cubism.Framework.Expression;
+using Live2D.Cubism.Framework.MotionFade;
+using Live2D.Cubism.Framework.MouthMovement;
+using Live2D.Cubism.Framework.Physics;
+using Live2D.Cubism.Framework.Pose;
+using Live2D.Cubism.Framework.Raycasting;
+using Live2D.Cubism.Framework.UserData;
 
 namespace Live2D.Cubism.Framework.Json
 {
@@ -74,7 +78,7 @@ namespace Live2D.Cubism.Framework.Json
         public static CubismModel3Json LoadAtPath(string assetPath)
         {
             // Use default asset load handler.
-            return LoadAtPath(assetPath, BuiltinLoadAssetAtPath);
+            return LoadAtPath(assetPath, GetBuiltinLoadAssetAtPath());
         }
 
         /// <summary>
@@ -218,7 +222,7 @@ namespace Live2D.Cubism.Framework.Json
         {
             get
             {
-                if(_pose3Json != null)
+                if (_pose3Json != null)
                 {
                     return _pose3Json;
                 }
@@ -246,7 +250,7 @@ namespace Live2D.Cubism.Framework.Json
             get
             {
                 // Fail silently...
-                if(FileReferences.Expressions == null)
+                if (FileReferences.Expressions == null)
                 {
                     return null;
                 }
@@ -350,243 +354,225 @@ namespace Live2D.Cubism.Framework.Json
         /// <param name="pickTexture">The texture mapper to use.</param>
         /// <param name="shouldImportAsOriginalWorkflow">Should import as original workflow.</param>
         /// <returns>The instantiated <see cref="CubismModel">model</see> on success; <see langword="null"/> otherwise.</returns>
-        public CubismModel ToModel(CubismMoc moc, MaterialPicker pickMaterial, TexturePicker pickTexture, bool shouldImportAsOriginalWorkflow = false)
+        public CubismModel ToModel(CubismMoc moc, MaterialPicker pickMaterial, TexturePicker pickTexture, bool shouldImportAsOriginalWorkflow)
+        {
+            var model = CreateAndInitializeModel(moc);
+            if (model == null) return null;
+
+            // Initialize components in the correct order
+            InitializeRenderers(model, pickMaterial, pickTexture);
+            InitializeDisplayInfo(model);  // Display info needs to be initialized before parameters
+            InitializeParameters(model);   // Parameters depend on display info
+            InitializeParts(model);
+            InitializeHitAreas(model);
+            InitializePhysics(model);
+            InitializeUserData(model);
+
+            if (shouldImportAsOriginalWorkflow)
+            {
+                InitializeOriginalWorkflow(model);
+            }
+
+            model.gameObject.GetOrAddComponent<Animator>();
+            model.ForceUpdateNow();
+
+            return model;
+        }
+
+        private CubismModel CreateAndInitializeModel(CubismMoc moc)
         {
             var model = CubismModel.InstantiateFrom(moc);
-
-            if (model == null)
-            {
-                return null;
-            }
+            if (model == null) return null;
 
             model.name = Path.GetFileNameWithoutExtension(FileReferences.Moc);
 
 #if UNITY_EDITOR
-            // Add parameters and parts inspectors.
             model.gameObject.AddComponent<CubismParametersInspector>();
             model.gameObject.AddComponent<CubismPartsInspector>();
 #endif
 
-            // Create renderers.
+            return model;
+        }
+
+        private void InitializeRenderers(CubismModel model, MaterialPicker pickMaterial, TexturePicker pickTexture)
+        {
             var rendererController = model.gameObject.AddComponent<CubismRenderController>();
             var renderers = rendererController.Renderers;
-
             var drawables = model.Drawables;
 
-            if (renderers == null || drawables  == null)
-            {
-                return null;
-            }
+            if (renderers == null || drawables == null) return;
 
-            // Initialize materials.
             for (var i = 0; i < renderers.Length; ++i)
             {
                 renderers[i].Material = pickMaterial(this, drawables[i]);
-            }
-
-
-            // Initialize textures.
-            for (var i = 0; i < renderers.Length; ++i)
-            {
                 renderers[i].MainTexture = pickTexture(this, drawables[i]);
             }
+        }
 
+        private void InitializeParts(CubismModel model)
+        {
+            var parts = model.Parts;
+            if (parts == null) return;
 
-            if (model.Parts != null)
+            for (int i = 0; i < parts.Length; i++)
             {
-                var parts = model.Parts;
+                var partColorsEditor = parts[i].gameObject.AddComponent<CubismPartColorsEditor>();
+                partColorsEditor.TryInitialize(model);
+            }
+        }
 
-                // Create and initialize partColorsEditors.
-                for (int i = 0; i < parts.Length; i++)
+        private void InitializeHitAreas(CubismModel model)
+        {
+            if (HitAreas == null) return;
+
+            var drawables = model.Drawables;
+            foreach (var hitArea in HitAreas)
+            {
+                var drawable = Array.Find(drawables, d => d.Id == hitArea.Id);
+                if (drawable == null) continue;
+
+                var hitDrawable = drawable.gameObject.AddComponent<CubismHitDrawable>();
+                hitDrawable.Name = hitArea.Name;
+                drawable.gameObject.AddComponent<CubismRaycastable>();
+            }
+        }
+
+        private void InitializeDisplayInfo(CubismModel model)
+        {
+            var cdi3Json = CubismDisplayInfo3Json.LoadFrom(DisplayInfo3Json);
+            if (cdi3Json == null) return;
+
+            // Initialize parts display info
+            foreach (var part in model.Parts)
+            {
+                var displayInfo = part.gameObject.AddComponent<CubismDisplayInfoPartName>();
+                displayInfo.Name = part.Id;
+                displayInfo.DisplayName = string.Empty;
+
+                var foundPart = Array.Find(cdi3Json.Parts, p => p.Id == part.Id);
+                if (foundPart.Id != null)
                 {
-                    var partColorsEditor = parts[i].gameObject.AddComponent<CubismPartColorsEditor>();
-                    partColorsEditor.TryInitialize(model);
+                    displayInfo.DisplayName = foundPart.Name;
                 }
             }
 
-
-            // Initialize drawables.
-            if (HitAreas != null)
+            // Initialize parameter display info
+            foreach (var parameter in model.Parameters)
             {
-                for (var i = 0; i < HitAreas.Length; i++)
-                {
-                    for (var j = 0; j < drawables.Length; j++)
-                    {
-                        if (drawables[j].Id == HitAreas[i].Id)
-                        {
-                            // Add components for hit judgement to HitArea target Drawables.
-                            var hitDrawable = drawables[j].gameObject.AddComponent<CubismHitDrawable>();
-                            hitDrawable.Name = HitAreas[i].Name;
+                var displayInfo = parameter.gameObject.AddComponent<CubismDisplayInfoParameterName>();
+                displayInfo.Name = parameter.Id;
+                displayInfo.DisplayName = string.Empty;
 
-                            drawables[j].gameObject.AddComponent<CubismRaycastable>();
-                            break;
-                        }
-                    }
+                var foundParameter = Array.Find(cdi3Json.Parameters, p => p.Id == parameter.Id);
+                if (foundParameter.Id != null)
+                {
+                    displayInfo.DisplayName = foundParameter.Name;
                 }
             }
 
-            //Load from cdi3.json
-            var DisplayInfo3JsonAsString = DisplayInfo3Json;
-            var cdi3Json = CubismDisplayInfo3Json.LoadFrom(DisplayInfo3JsonAsString);
-            if (cdi3Json != null)
+            // Initialize combined parameters
+            var combinedParameters = cdi3Json.CombinedParameters;
+            if (combinedParameters != null)
             {
-                // Setting up the part name for display.
-                // Initialize groups.
-                var parts = model.Parts;
+                const int combinedParameterCount = 2;
+                var combinedParameterInfo = model.gameObject.AddComponent<CubismDisplayInfoCombinedParameterInfo>();
+                combinedParameterInfo.CombinedParameters = new CubismDisplayInfo3Json.CombinedParameter[combinedParameters.Length];
 
-                for (var i = 0; i < parts.Length; i++)
+                for (var i = 0; i < combinedParameters.Length; i++)
                 {
-                    var cubismDisplayInfoPartNames = parts[i].gameObject.AddComponent<CubismDisplayInfoPartName>();
-                    cubismDisplayInfoPartNames.Name = parts[i].Id;
-                    for (int j = 0; j < cdi3Json.Parts.Length; j++)
+                    if (combinedParameters[i].Ids == null || combinedParameters[i].Ids.Length != combinedParameterCount)
                     {
-                        if (cdi3Json.Parts[j].Id == parts[i].Id)
-                        {
-                            cubismDisplayInfoPartNames.Name = cdi3Json.Parts[j].Name;
-                            break;
-                        }
+                        Debug.LogWarning($"The data contains invalid CombinedParameters in {model.Moc.name}.cdi3.json.");
+                        continue;
                     }
-                    cubismDisplayInfoPartNames.DisplayName = string.Empty;
-                }
 
-                // Get combined parameter information
-                var combinedParameters = cdi3Json.CombinedParameters;
-
-                if (combinedParameters != null)
-                {
-                    // Parameters are always combined in pairs of two.
-                    const int combinedParameterCount = 2;
-
-                    // Set up CubismDisplayInfoCombinedParameterInfo component.
-                    var combinedParameterInfo = model.gameObject.AddComponent<CubismDisplayInfoCombinedParameterInfo>();
-                    combinedParameterInfo.CombinedParameters = new CubismDisplayInfo3Json.CombinedParameter[combinedParameters.Length];
-
-                    for (var index = 0; index < combinedParameters.Length; index++)
+                    combinedParameterInfo.CombinedParameters[i] = new CubismDisplayInfo3Json.CombinedParameter
                     {
-                        // Skip if the combined parameter is invalid.
-                        if (combinedParameters[index].Ids == null || combinedParameters[index].Ids.Length != combinedParameterCount)
-                        {
-                            Debug.LogWarning($"The data contains invalid CombinedParameters in {model.Moc.name}.cdi3.json.");
-                            continue;
-                        }
-
-                        var combinedParameterIds = combinedParameters[index].Ids;
-
-                        // Set CombinedParameter.
-                        combinedParameterInfo.CombinedParameters[index] = new CubismDisplayInfo3Json.CombinedParameter
-                        {
-                            HorizontalParameterId = combinedParameterIds[0],
-                            VerticalParameterId = combinedParameterIds[1]
-                        };
-                    }
+                        HorizontalParameterId = combinedParameters[i].Ids[0],
+                        VerticalParameterId = combinedParameters[i].Ids[1]
+                    };
                 }
             }
+        }
 
-            // Initialize groups.
+        private void InitializeParameters(CubismModel model)
+        {
+            if (model == null) return;
+
+            var cdi3Json = CubismDisplayInfo3Json.LoadFrom(DisplayInfo3Json);
             var parameters = model.Parameters;
+            if (parameters == null) return;
 
-            for (var i = 0; i < parameters.Length; ++i)
+            // Initialize special parameter types first
+            foreach (var parameter in parameters)
             {
-                if (IsParameterInGroup(parameters[i], "EyeBlink"))
+                if (parameter == null) continue;
+
+                // Initialize special parameter types
+                if (IsParameterInGroup(parameter, "EyeBlink"))
                 {
                     model.gameObject.GetOrAddComponent<CubismEyeBlinkController>();
-                    parameters[i].gameObject.AddComponent<CubismEyeBlinkParameter>();
+                    parameter.gameObject.AddComponent<CubismEyeBlinkParameter>();
                 }
 
-
-                // Set up mouth parameters.
-                if (IsParameterInGroup(parameters[i], "LipSync"))
+                if (IsParameterInGroup(parameter, "LipSync"))
                 {
                     model.gameObject.GetOrAddComponent<CubismMouthController>();
-                    parameters[i].gameObject.AddComponent<CubismMouthParameter>();
+                    parameter.gameObject.AddComponent<CubismMouthParameter>();
                 }
 
-
-                // Setting up the parameter name for display.
-                if (cdi3Json != null)
+                // Ensure each parameter has a display info component
+                if (parameter.gameObject.GetComponent<CubismDisplayInfoParameterName>() == null)
                 {
-                    var cubismDisplayInfoParameterName = parameters[i].gameObject.AddComponent<CubismDisplayInfoParameterName>();
-                    cubismDisplayInfoParameterName.Name = parameters[i].Id;
-                    cubismDisplayInfoParameterName.DisplayName = string.Empty;
-                    var foundParameter = Array.Find(cdi3Json.Parameters, p => !string.IsNullOrEmpty(p.Id) && p.Id == parameters[i].Id);
-                    if (foundParameter.Id!=null)
-                    {
-                        cubismDisplayInfoParameterName.DisplayName = foundParameter.Name;
-                    }
+                    var displayInfo = parameter.gameObject.AddComponent<CubismDisplayInfoParameterName>();
+                    displayInfo.Name = parameter.Id;
+                    displayInfo.DisplayName = string.Empty;
+                    displayInfo.GroupName = string.Empty;
                 }
             }
 
-            // Setting up parameters and groups
-            SetupParametersAndGroups(model, cdi3Json);
-
-            // Add mask controller if required.
-            for (var i = 0; i < drawables.Length; ++i)
+            // Initialize parameter groups if display info is available
+            if (cdi3Json != null)
             {
-                if (!drawables[i].IsMasked)
-                {
-                    continue;
-                }
-
-                // Add controller exactly once...
-                model.gameObject.AddComponent<CubismMaskController>();
-
-                break;
+                SetupParametersAndGroups(model, cdi3Json);
             }
+        }
 
-            // Add original workflow component if is original workflow.
-            if(shouldImportAsOriginalWorkflow)
+        private void InitializePhysics(CubismModel model)
+        {
+            var physics3JsonString = Physics3Json;
+            if (string.IsNullOrEmpty(physics3JsonString)) return;
+
+            var physics3Json = CubismPhysics3Json.LoadFrom(physics3JsonString);
+            var physicsController = model.gameObject.GetOrAddComponent<CubismPhysicsController>();
+            physicsController.Initialize(physics3Json.ToRig());
+        }
+
+        private void InitializeUserData(CubismModel model)
+        {
+            var userData3JsonString = UserData3Json;
+            if (string.IsNullOrEmpty(userData3JsonString)) return;
+
+            var userData3Json = CubismUserData3Json.LoadFrom(userData3JsonString);
+            var drawableBodies = userData3Json.ToBodyArray(CubismUserDataTargetType.ArtMesh);
+
+            foreach (var drawable in model.Drawables)
             {
-                // Add cubism update manager.
-                var updateManager = model.gameObject.GetOrAddComponent<CubismUpdateController>();
-                // Add parameter store.
-                var parameterStore = model.gameObject.GetOrAddComponent<CubismParameterStore>();
+                var index = GetBodyIndexById(drawableBodies, drawable.Id);
+                if (index < 0) continue;
 
-                // Add pose controller.
-                var poseController = model.gameObject.GetOrAddComponent<CubismPoseController>();
-
-                // Add expression controller.
-                var expressionController = model.gameObject.GetOrAddComponent<CubismExpressionController>();
-
-                // Add fade controller.
-                var motionFadeController = model.gameObject.GetOrAddComponent<CubismFadeController>();
+                var tag = drawable.gameObject.GetOrAddComponent<CubismUserDataTag>();
+                tag.Initialize(drawableBodies[index]);
             }
+        }
 
-            // Initialize physics if JSON exists.
-            var physics3JsonAsString = Physics3Json;
-
-            if (!string.IsNullOrEmpty(physics3JsonAsString))
-            {
-                var physics3Json = CubismPhysics3Json.LoadFrom(physics3JsonAsString);
-                var physicsController = model.gameObject.GetOrAddComponent<CubismPhysicsController>();
-                physicsController.Initialize(physics3Json.ToRig());
-            }
-
-            var userData3JsonAsString = UserData3Json;
-            if (!string.IsNullOrEmpty(userData3JsonAsString))
-            {
-                var userData3Json = CubismUserData3Json.LoadFrom(userData3JsonAsString);
-
-
-                var drawableBodies = userData3Json.ToBodyArray(CubismUserDataTargetType.ArtMesh);
-
-                for (var i = 0; i < drawables.Length; ++i)
-                {
-                    var index = GetBodyIndexById(drawableBodies, drawables[i].Id);
-
-                    if (index >= 0)
-                    {
-                        var tag = drawables[i].gameObject.GetOrAddComponent<CubismUserDataTag>();
-                        tag.Initialize(drawableBodies[index]);
-                    }
-                }
-            }
-
-            model.gameObject.GetOrAddComponent<Animator>();
-            // Make sure model is 'fresh'
-            model.ForceUpdateNow();
-
-
-            return model;
+        private void InitializeOriginalWorkflow(CubismModel model)
+        {
+            model.gameObject.GetOrAddComponent<CubismUpdateController>();
+            model.gameObject.GetOrAddComponent<CubismParameterStore>();
+            model.gameObject.GetOrAddComponent<CubismPoseController>();
+            model.gameObject.GetOrAddComponent<CubismExpressionController>();
+            model.gameObject.GetOrAddComponent<CubismFadeController>();
         }
 
         #region Helper Methods
@@ -607,106 +593,75 @@ namespace Live2D.Cubism.Framework.Json
 
 
         /// <summary>
-        /// Builtin method for loading assets.
+        /// Builtin method for loading assets based on the current Unity environment.
         /// </summary>
         /// <param name="assetType">Asset type.</param>
         /// <param name="assetPath">Path to asset.</param>
         /// <returns>The asset on success; <see langword="null"/> otherwise.</returns>
-        private static object BuiltinLoadAssetAtPath(Type assetType, string assetPath)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static LoadAssetAtPathHandler GetBuiltinLoadAssetAtPath()
         {
-            // Explicitly deal with byte arrays.
-            if (assetType == typeof(byte[]))
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
             {
-#if UNITY_EDITOR
-                return File.ReadAllBytes(assetPath);
-#else
-                var textAsset = Resources.Load(assetPath, typeof(TextAsset)) as TextAsset;
-
-
-                return (textAsset != null)
-                    ? textAsset.bytes
-                    : null;
-#endif
+                return LoadAssetInEditor;
             }
-            else if (assetType == typeof(string))
+#endif
+            return LoadAssetInRuntime;
+
+#if UNITY_EDITOR
+
+            static object LoadAssetInEditor(Type assetType, string assetPath)
             {
-#if UNITY_EDITOR
-                return File.ReadAllText(assetPath);
-#else
-                var textAsset = Resources.Load(assetPath, typeof(TextAsset)) as TextAsset;
+                // Handle raw file types
+                if (assetType == typeof(byte[]))
+                {
+                    return File.ReadAllBytes(assetPath);
+                }
 
+                if (assetType == typeof(string))
+                {
+                    return File.ReadAllText(assetPath);
+                }
 
-                return (textAsset != null)
-                    ? textAsset.text
-                    : null;
-#endif
+                // Handle Unity assets
+                return AssetDatabase.LoadAssetAtPath(assetPath, assetType);
             }
 
-
-#if UNITY_EDITOR
-            return AssetDatabase.LoadAssetAtPath(assetPath, assetType);
-#else
-            return Resources.Load(assetPath, assetType);
 #endif
+
+            static object LoadAssetInRuntime(Type assetType, string assetPath)
+            {
+                // Handle text assets
+                if (assetType == typeof(byte[]) || assetType == typeof(string))
+                {
+                    var textAsset = Resources.Load(assetPath, typeof(TextAsset)) as TextAsset;
+                    if (textAsset == null) return null;
+
+                    return assetType == typeof(byte[]) ? textAsset.bytes : textAsset.text;
+                }
+
+                // Handle Unity assets
+                return Resources.Load(assetPath, assetType);
+            }
         }
 
-
-        /// <summary>
-        /// Checks whether the parameter is an eye blink parameter.
-        /// </summary>
-        /// <param name="parameter">Parameter to check.</param>
-        /// <param name="groupName">Name of group to query for.</param>
-        /// <returns><see langword="true"/> if parameter is an eye blink parameter; <see langword="false"/> otherwise.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool IsParameterInGroup(CubismParameter parameter, string groupName)
         {
-            // Return early if groups aren't available...
-            if (Groups == null || Groups.Length == 0)
-            {
-                return false;
-            }
+            if (Groups == null || Groups.Length == 0) return false;
 
+            var group = Array.Find(Groups, g => g.Name == groupName);
+            if (group.Ids == null) return false;
 
-            for (var i = 0; i < Groups.Length; ++i)
-            {
-                if (Groups[i].Name != groupName)
-                {
-                    continue;
-                }
-
-                if(Groups[i].Ids != null)
-                {
-                    for (var j = 0; j < Groups[i].Ids.Length; ++j)
-                    {
-                        if (Groups[i].Ids[j] == parameter.name)
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-
-
-            return false;
+            return Array.Exists(group.Ids, id => id == parameter.name);
         }
 
 
-        /// <summary>
-        /// Get body index from body array by Id.
-        /// </summary>
-        /// <param name="bodies">Target body array.</param>
-        /// <param name="id">Id for find.</param>
-        /// <returns>Array index if Id found; -1 otherwise.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetBodyIndexById(CubismUserDataBody[] bodies, string id)
         {
-            for (var i = 0; i < bodies.Length; ++i)
-            {
-                if (bodies[i].Id == id)
-                {
-                    return i;
-                }
-            }
-
-            return -1;
+            return Array.FindIndex(bodies, body => body.Id == id);
         }
 
 
@@ -898,7 +853,10 @@ namespace Live2D.Cubism.Framework.Json
 
         private void SetupParametersAndGroups(CubismModel model, CubismDisplayInfo3Json cdi3Json)
         {
-            if (cdi3Json == null) return;
+            if (model == null || cdi3Json == null) return;
+
+            var parameters = model.Parameters;
+            if (parameters == null) return;
 
             // Find or create Parameters container
             var parametersContainer = model.transform.Find("Parameters")?.gameObject;
@@ -907,84 +865,68 @@ namespace Live2D.Cubism.Framework.Json
                 parametersContainer = new GameObject("Parameters");
                 parametersContainer.transform.SetParent(model.transform);
             }
-            var groupsManager = parametersContainer.GetComponent<CubismParameterGroups>() 
+
+            var groupsManager = parametersContainer.GetComponent<CubismParameterGroups>()
                 ?? parametersContainer.AddComponent<CubismParameterGroups>();
 
-            // Create parameter to group mapping
             var groups = new Dictionary<string, (GameObject obj, List<CubismDisplayInfoParameterName> parameters)>();
-            var parameters = model.Parameters;
 
             // First pass: Create parameter components and group containers
-            for (var i = 0; i < parameters.Length; ++i)
-            {
-                var parameter = parameters[i];
-                var displayName = parameter.Id;
-                var groupId = string.Empty;
-                var groupName = string.Empty;
-
-                // Find parameter info in cdi3
-                for (int j = 0; j < cdi3Json.Parameters.Length; j++)
-                {
-                    if (cdi3Json.Parameters[j].Id == parameter.Id)
-                    {
-                        displayName = cdi3Json.Parameters[j].Name;
-                        
-                        // Find group info
-                        var groupInfo = cdi3Json.ParameterGroups.FirstOrDefault(g => g.Id == cdi3Json.Parameters[j].GroupId);
-                        if (!string.IsNullOrEmpty(groupInfo.Id))
-                        {
-                            groupId = groupInfo.Id;
-                            groupName = groupInfo.Name;
-                        }
-                        break;
-                    }
-                }
-
-                // Get or add display info component
-                var displayInfoComponent = parameter.GetComponent<CubismDisplayInfoParameterName>();
-                displayInfoComponent.GroupName = groupName;
-
-                // Create group container if needed
-                if (!string.IsNullOrEmpty(groupId) && !groups.ContainsKey(groupId))
-                {
-                    groups[groupId] = (
-                        new GameObject(groupName), 
-                        new List<CubismDisplayInfoParameterName>()
-                    );
-                    groups[groupId].obj.transform.SetParent(parametersContainer.transform);
-                }
-
-                // Add parameter to group list but don't move it yet
-                if (!string.IsNullOrEmpty(groupId))
-                {
-                    groups[groupId].parameters.Add(displayInfoComponent);
-                }
-            }
-
-            // Second pass: Set up groups data first
-            groupsManager.Groups = groups.Select(kvp => new CubismParameterGroups.ParameterGroup
-            {
-                Id = kvp.Key,
-                Name = kvp.Value.obj.name,
-                Parameters = kvp.Value.parameters.ToArray()
-            }).ToArray();
-
-            // Third pass: Move parameters to their groups
-            // This happens after all other setup is complete
             foreach (var parameter in parameters)
             {
+                if (parameter == null) continue;
+
                 var displayInfo = parameter.GetComponent<CubismDisplayInfoParameterName>();
-                if (!string.IsNullOrEmpty(displayInfo.GroupName))
+                if (displayInfo == null) continue;
+
+                var paramInfo = Array.Find(cdi3Json.Parameters, p => p.Id == parameter.Id);
+                if (paramInfo.Id == null) continue;
+
+                // Find group info
+                var groupInfo = Array.Find(cdi3Json.ParameterGroups, g => g.Id == paramInfo.GroupId);
+                if (groupInfo.Id == null) continue;
+
+                // Create group container if needed
+                if (!groups.ContainsKey(groupInfo.Id))
                 {
-                    var group = groups.FirstOrDefault(g => g.Value.obj.name == displayInfo.GroupName);
-                    if (group.Value.obj != null)
-                    {
-                        parameter.transform.SetParent(group.Value.obj.transform, false);
-                    }
+                    var groupObject = new GameObject(groupInfo.Name);
+                    groupObject.transform.SetParent(parametersContainer.transform);
+                    groups[groupInfo.Id] = (groupObject, new List<CubismDisplayInfoParameterName>());
                 }
-                else
+
+                // Update parameter info
+                displayInfo.GroupName = groupInfo.Name;
+                groups[groupInfo.Id].parameters.Add(displayInfo);
+            }
+
+            // Set up groups data
+            if (groups.Any())
+            {
+                groupsManager.Groups = groups.Select(kvp => new CubismParameterGroups.ParameterGroup
                 {
-                    parameter.transform.SetParent(parametersContainer.transform, false);
+                    Id = kvp.Key,
+                    Name = kvp.Value.obj.name,
+                    Parameters = kvp.Value.parameters.ToArray()
+                }).ToArray();
+
+                // Organize parameters
+                foreach (var parameter in parameters)
+                {
+                    if (parameter == null) continue;
+
+                    var displayInfo = parameter.GetComponent<CubismDisplayInfoParameterName>();
+                    if (displayInfo == null) continue;
+
+                    if (string.IsNullOrEmpty(displayInfo.GroupName))
+                    {
+                        parameter.transform.SetParent(parametersContainer.transform, false);
+                        continue;
+                    }
+
+                    var group = groups.FirstOrDefault(g => g.Value.obj.name == displayInfo.GroupName);
+                    if (group.Value.obj == null) continue;
+
+                    parameter.transform.SetParent(group.Value.obj.transform, false);
                 }
             }
         }
