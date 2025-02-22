@@ -6,8 +6,9 @@
  */
 
 
-using Live2D.Cubism.Framework;
+using UnityEngine;
 using UnityEditor;
+using Live2D.Cubism.Framework;
 
 namespace Live2D.Cubism.Editor.Inspectors
 {
@@ -24,26 +25,14 @@ namespace Live2D.Cubism.Editor.Inspectors
         /// </summary>
         public override void OnInspectorGUI()
         {
-            // Fail silently.
-            if (serializedObject == null)
-            {
-                return;
-            }
+            var parameter = target as CubismDisplayInfoParameterName;
 
+            EditorGUI.BeginDisabledGroup(true);
+            EditorGUILayout.TextField("Name", parameter.Name);
+            EditorGUILayout.TextField("Group", parameter.GroupName);
+            EditorGUI.EndDisabledGroup();
 
-            serializedObject.Update();
-
-            EditorGUI.BeginChangeCheck();
-
-            // Display name.
-            var displayName = serializedObject.FindProperty("DisplayName");
-            EditorGUILayout.PropertyField(displayName);
-
-            // Save any changes.
-            if (EditorGUI.EndChangeCheck())
-            {
-                serializedObject.ApplyModifiedProperties();
-            }
+            parameter.DisplayName = EditorGUILayout.TextField("Display Name", parameter.DisplayName);
         }
         #endregion
     }

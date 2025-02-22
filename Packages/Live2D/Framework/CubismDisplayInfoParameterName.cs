@@ -25,5 +25,11 @@ namespace Live2D.Cubism.Framework
         /// </summary>
         [SerializeField]
         public string DisplayName;
+
+        /// <summary>
+        /// Group name from cdi3.json.
+        /// </summary>
+        [SerializeField]
+        public string GroupName;
     }
 }

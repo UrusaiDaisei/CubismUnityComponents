@@ -22,6 +22,8 @@ using Live2D.Cubism.Rendering.Masking;
 using UnityEditor;
 #endif
 using UnityEngine;
+using System.Collections.Generic;
+using System.Linq;
 
 
 namespace Live2D.Cubism.Framework.Json
@@ -505,17 +507,17 @@ namespace Live2D.Cubism.Framework.Json
                 {
                     var cubismDisplayInfoParameterName = parameters[i].gameObject.AddComponent<CubismDisplayInfoParameterName>();
                     cubismDisplayInfoParameterName.Name = parameters[i].Id;
-                    for (int j = 0; j < cdi3Json.Parameters.Length; j++)
-                    {
-                        if (cdi3Json.Parameters[j].Id == parameters[i].Id)
-                        {
-                            cubismDisplayInfoParameterName.Name = cdi3Json.Parameters[j].Name;
-                            break;
-                        }
-                    }
                     cubismDisplayInfoParameterName.DisplayName = string.Empty;
+                    var foundParameter = Array.Find(cdi3Json.Parameters, p => !string.IsNullOrEmpty(p.Id) && p.Id == parameters[i].Id);
+                    if (foundParameter.Id!=null)
+                    {
+                        cubismDisplayInfoParameterName.DisplayName = foundParameter.Name;
+                    }
                 }
             }
+
+            // Setting up parameters and groups
+            SetupParametersAndGroups(model, cdi3Json);
 
             // Add mask controller if required.
             for (var i = 0; i < drawables.Length; ++i)
@@ -893,5 +895,98 @@ namespace Live2D.Cubism.Framework.Json
         }
 
         #endregion
+
+        private void SetupParametersAndGroups(CubismModel model, CubismDisplayInfo3Json cdi3Json)
+        {
+            if (cdi3Json == null) return;
+
+            // Find or create Parameters container
+            var parametersContainer = model.transform.Find("Parameters")?.gameObject;
+            if (parametersContainer == null)
+            {
+                parametersContainer = new GameObject("Parameters");
+                parametersContainer.transform.SetParent(model.transform);
+            }
+            var groupsManager = parametersContainer.GetComponent<CubismParameterGroups>() 
+                ?? parametersContainer.AddComponent<CubismParameterGroups>();
+
+            // Create parameter to group mapping
+            var groups = new Dictionary<string, (GameObject obj, List<CubismDisplayInfoParameterName> parameters)>();
+            var parameters = model.Parameters;
+
+            // First pass: Create parameter components and group containers
+            for (var i = 0; i < parameters.Length; ++i)
+            {
+                var parameter = parameters[i];
+                var displayName = parameter.Id;
+                var groupId = string.Empty;
+                var groupName = string.Empty;
+
+                // Find parameter info in cdi3
+                for (int j = 0; j < cdi3Json.Parameters.Length; j++)
+                {
+                    if (cdi3Json.Parameters[j].Id == parameter.Id)
+                    {
+                        displayName = cdi3Json.Parameters[j].Name;
+                        
+                        // Find group info
+                        var groupInfo = cdi3Json.ParameterGroups.FirstOrDefault(g => g.Id == cdi3Json.Parameters[j].GroupId);
+                        if (!string.IsNullOrEmpty(groupInfo.Id))
+                        {
+                            groupId = groupInfo.Id;
+                            groupName = groupInfo.Name;
+                        }
+                        break;
+                    }
+                }
+
+                // Get or add display info component
+                var displayInfoComponent = parameter.GetComponent<CubismDisplayInfoParameterName>();
+                displayInfoComponent.GroupName = groupName;
+
+                // Create group container if needed
+                if (!string.IsNullOrEmpty(groupId) && !groups.ContainsKey(groupId))
+                {
+                    groups[groupId] = (
+                        new GameObject(groupName), 
+                        new List<CubismDisplayInfoParameterName>()
+                    );
+                    groups[groupId].obj.transform.SetParent(parametersContainer.transform);
+                }
+
+                // Add parameter to group list but don't move it yet
+                if (!string.IsNullOrEmpty(groupId))
+                {
+                    groups[groupId].parameters.Add(displayInfoComponent);
+                }
+            }
+
+            // Second pass: Set up groups data first
+            groupsManager.Groups = groups.Select(kvp => new CubismParameterGroups.ParameterGroup
+            {
+                Id = kvp.Key,
+                Name = kvp.Value.obj.name,
+                Parameters = kvp.Value.parameters.ToArray()
+            }).ToArray();
+
+            // Third pass: Move parameters to their groups
+            // This happens after all other setup is complete
+            foreach (var parameter in parameters)
+            {
+                var displayInfo = parameter.GetComponent<CubismDisplayInfoParameterName>();
+                if (!string.IsNullOrEmpty(displayInfo.GroupName))
+                {
+                    var group = groups.FirstOrDefault(g => g.Value.obj.name == displayInfo.GroupName);
+                    if (group.Value.obj != null)
+                    {
+                        parameter.transform.SetParent(group.Value.obj.transform, false);
+                    }
+                }
+                else
+                {
+                    parameter.transform.SetParent(parametersContainer.transform, false);
+                }
+            }
+        }
     }
 }

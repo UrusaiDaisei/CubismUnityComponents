@@ -22,7 +22,6 @@ namespace Packages.Live2D.Editor.Importers.New
         }
 
         [SerializeField]
-        
         private OverrideOption _overrideImportAsOriginalWorkflowOption;
 
         public override void OnImportAsset(AssetImportContext ctx)
@@ -43,7 +42,7 @@ namespace Packages.Live2D.Editor.Importers.New
             AssignDependencies(ctx, model3Json.FileReferences);
 
             // Instantiate model source and model.
-            var model = model3Json.ToModel(moc,CubismImporter.OnPickMaterial, CubismImporter.OnPickTexture, ShouldImportAsOriginalWorkflow);
+            var model = model3Json.ToModel(moc, CubismImporter.OnPickMaterial, CubismImporter.OnPickTexture, ShouldImportAsOriginalWorkflow);
 
             if (model == null) {
                 ctx.LogImportError("unable to import model data.");
