@@ -10,6 +10,8 @@ using Live2D.Cubism.Framework;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace Live2D.Cubism.Editor.Inspectors
 {
@@ -29,7 +31,6 @@ namespace Live2D.Cubism.Editor.Inspectors
         #region Runtime
 
         private CubismParameter[] Parameters { get; set; }
-        private string[] ParametersNameFromJson { get; set; }
         private bool IsInitialized => Parameters != null;
 
         #endregion
@@ -95,31 +96,44 @@ namespace Live2D.Cubism.Editor.Inspectors
             _root.focusable = true;
             _root.pickingMode = PickingMode.Position;
 
+            // Handle Ctrl state globally
+            void UpdateCtrlState(bool isCtrlPressed)
+            {
+                if (isCtrlPressed)
+                    _root.AddToClassList("ctrl-pressed");
+                else
+                    _root.RemoveFromClassList("ctrl-pressed");
+            }
+
             // Register for mouse enter/leave at root level
             _root.RegisterCallback<MouseEnterEvent>(evt =>
             {
                 _root.Focus();
-
-                if (!evt.ctrlKey) return;
-                _root.AddToClassList("ctrl-pressed");
+                UpdateCtrlState(evt.ctrlKey);
             });
 
             _root.RegisterCallback<MouseLeaveEvent>(evt =>
             {
-                _root.RemoveFromClassList("ctrl-pressed");
+                UpdateCtrlState(false);
             });
 
-            // Add Ctrl key handling at container level
+            // Add Ctrl key handling at root level
             _root.RegisterCallback<KeyDownEvent>(evt =>
             {
-                if (!evt.ctrlKey) return;
-                _root.AddToClassList("ctrl-pressed");
+                if (evt.keyCode == KeyCode.LeftControl || evt.keyCode == KeyCode.RightControl)
+                    UpdateCtrlState(true);
             });
 
             _root.RegisterCallback<KeyUpEvent>(evt =>
             {
-                if (!evt.ctrlKey) return;
-                _root.RemoveFromClassList("ctrl-pressed");
+                if (evt.keyCode == KeyCode.LeftControl || evt.keyCode == KeyCode.RightControl)
+                    UpdateCtrlState(false);
+            });
+
+            // Also handle focus loss
+            _root.RegisterCallback<FocusOutEvent>(evt =>
+            {
+                UpdateCtrlState(false);
             });
 
             if (!IsInitialized)
@@ -133,59 +147,223 @@ namespace Live2D.Cubism.Editor.Inspectors
 
         private void CreateParameterControls()
         {
-            for (var i = 0; i < Parameters.Length; i++)
+            var groupsComponent = (target as Component).GetComponentInChildren<CubismParameterGroups>();
+            var combinedInfo = (target as Component).GetComponentInChildren<CubismDisplayInfoCombinedParameterInfo>();
+            _parametersContainer.Clear();
+
+            if (groupsComponent?.Groups == null)
             {
-                CreateParameterSlider(i);
+                CreateFlatParameterList(combinedInfo);
+                return;
+            }
+
+            CreateGroupedParameters(groupsComponent, combinedInfo);
+        }
+
+        private void CreateFlatParameterList(CubismDisplayInfoCombinedParameterInfo combinedInfo)
+        {
+            var processedParams = new HashSet<int>();
+
+            // Handle combined parameters first
+            if (combinedInfo?.CombinedParameters != null)
+            {
+                foreach (var combined in combinedInfo.CombinedParameters)
+                {
+                    var horizontalIndex = System.Array.FindIndex(Parameters, p => p.Id == combined.HorizontalParameterId);
+                    var verticalIndex = System.Array.FindIndex(Parameters, p => p.Id == combined.VerticalParameterId);
+
+                    if (horizontalIndex < 0 || verticalIndex < 0)
+                    {
+                        Debug.LogError($"Combined parameter not found: {combined.HorizontalParameterId} or {combined.VerticalParameterId}");
+                        continue;
+                    }
+
+                    var combinedContainer = new VisualElement();
+                    combinedContainer.AddToClassList("combined-parameter");
+
+                    CreateParameterSlider(horizontalIndex, Parameters[horizontalIndex], combinedContainer);
+                    CreateParameterSlider(verticalIndex, Parameters[verticalIndex], combinedContainer);
+
+                    _parametersContainer.Add(combinedContainer);
+                    processedParams.Add(horizontalIndex);
+                    processedParams.Add(verticalIndex);
+                }
+            }
+
+            // Handle remaining parameters
+            for (int i = 0; i < Parameters.Length; i++)
+            {
+                if (!processedParams.Contains(i))
+                {
+                    CreateParameterSlider(i, Parameters[i], _parametersContainer);
+                }
             }
         }
 
-        private void CreateParameterSlider(int index)
+        private void CreateGroupedParameters(CubismParameterGroups groupsComponent, CubismDisplayInfoCombinedParameterInfo combinedInfo)
         {
-            var parameter = Parameters[index];
-            var name = string.IsNullOrEmpty(ParametersNameFromJson[index])
-                ? parameter.Id
-                : ParametersNameFromJson[index];
+            var modelId = (target as Component).FindCubismModel().name;
+            var processedParams = new HashSet<string>();
+
+            // Track combined parameters
+            if (combinedInfo?.CombinedParameters != null)
+            {
+                foreach (var combined in combinedInfo.CombinedParameters)
+                {
+                    processedParams.Add(combined.HorizontalParameterId);
+                    processedParams.Add(combined.VerticalParameterId);
+                }
+            }
+
+            foreach (var group in groupsComponent.Groups)
+            {
+                var foldoutKey = $"{modelId}_{group.Name}";
+                var foldout = new Foldout
+                {
+                    text = group.Name,
+                    value = SessionState.GetBool(foldoutKey, false)
+                };
+                foldout.RegisterValueChangedCallback(evt => SessionState.SetBool(foldoutKey, evt.newValue));
+                foldout.AddToClassList("parameter-group");
+                _parametersContainer.Add(foldout);
+
+                // Handle regular parameters first
+                foreach (var parameter in group.Parameters.Where(p => !processedParams.Contains(p.Name)))
+                {
+                    var index = System.Array.FindIndex(Parameters, p => p.Id == parameter.Name);
+                    if (index < 0) continue;
+
+                    CreateParameterSlider(index, Parameters[index], foldout);
+                }
+
+                // Handle combined parameters
+                if (combinedInfo?.CombinedParameters != null)
+                {
+                    foreach (var combined in combinedInfo.CombinedParameters)
+                    {
+                        var horizontalParamInfo = group.Parameters.FirstOrDefault(p => p.Name == combined.HorizontalParameterId);
+                        var verticalParamInfo = group.Parameters.FirstOrDefault(p => p.Name == combined.VerticalParameterId);
+
+                        if (horizontalParamInfo == null || verticalParamInfo == null) continue;
+
+                        var horizontalIndex = System.Array.FindIndex(Parameters, p => p.Id == horizontalParamInfo.Name);
+                        var verticalIndex = System.Array.FindIndex(Parameters, p => p.Id == verticalParamInfo.Name);
+
+                        if (horizontalIndex < 0 || verticalIndex < 0)
+                        {
+                            Debug.LogError($"Combined parameter not found: {combined.HorizontalParameterId} or {combined.VerticalParameterId}");
+                            continue;
+                        }
+
+                        var combinedContainer = new VisualElement();
+                        combinedContainer.AddToClassList("combined-parameter");
+
+                        CreateCombinedParameterControl(
+                            Parameters[horizontalIndex],
+                            Parameters[verticalIndex],
+                            combinedContainer);
+
+                        foldout.Add(combinedContainer);
+                    }
+                }
+            }
+        }
+
+        private void CreateParameterSlider(int index, CubismParameter parameter, VisualElement container)
+        {
+            var displayInfo = parameter.GetComponent<CubismDisplayInfoParameterName>();
+
+            var name = displayInfo != null && !string.IsNullOrEmpty(displayInfo.DisplayName)
+                ? displayInfo.DisplayName
+                : parameter.Id;
 
             var slider = new Slider(name, parameter.MinimumValue, parameter.MaximumValue)
             {
-                value = parameter.Value,
-                style = { marginLeft = 0 }
+                value = parameter.Value
             };
 
-            ConfigureSliderLabel(slider, index);
-            ConfigureSliderCallback(slider, index);
+            slider.AddToClassList("parameter-slider");
+            ConfigureSliderLabel(slider, index, parameter);
+            ConfigureSliderCallback(slider, parameter);
 
-            _parametersContainer.Add(slider);
+            container.Add(slider);
         }
 
-        private void ConfigureSliderLabel(Slider slider, int index)
+        private void ConfigureSliderLabel(Slider slider, int index, CubismParameter parameter)
         {
             var label = slider.Q<Label>();
+            ConfigureParameterLabel(label, parameter);
+        }
 
-            // Add a permanent tooltip
+        private void ConfigureSliderCallback(Slider slider, CubismParameter parameter)
+        {
+            slider.RegisterValueChangedCallback(evt =>
+            {
+                parameter.Value = evt.newValue;
+                EditorUtility.SetDirty(parameter);
+                UpdateModel();
+            });
+        }
+
+        private void ConfigureParameterLabel(Label label, CubismParameter parameter)
+        {
             label.tooltip = "Ctrl+Click to highlight in hierarchy";
-
-            // Add hover style class
             label.AddToClassList("parameter-label");
 
             label.RegisterCallback<MouseDownEvent>(evt =>
             {
                 if (!evt.ctrlKey) return;
 
-                EditorGUIUtility.PingObject(Parameters[index]);
-                Selection.activeObject = Parameters[index];
+                EditorGUIUtility.PingObject(parameter);
+                Selection.activeObject = parameter;
                 evt.StopPropagation();
             });
         }
 
-        private void ConfigureSliderCallback(Slider slider, int index)
+        private void CreateCombinedParameterControl(CubismParameter horizontalParam, CubismParameter verticalParam, VisualElement container)
         {
-            slider.RegisterValueChangedCallback(evt =>
+            var horizontalInfo = horizontalParam.GetComponent<CubismDisplayInfoParameterName>();
+            var verticalInfo = verticalParam.GetComponent<CubismDisplayInfoParameterName>();
+
+            var horizontalName = horizontalInfo != null && !string.IsNullOrEmpty(horizontalInfo.DisplayName)
+                ? horizontalInfo.DisplayName
+                : horizontalParam.Id;
+
+            var verticalName = verticalInfo != null && !string.IsNullOrEmpty(verticalInfo.DisplayName)
+                ? verticalInfo.DisplayName
+                : verticalParam.Id;
+
+            var horizontal = new CubismParameterXYSlider.AxisParameter(
+                horizontalName,
+                horizontalParam.MinimumValue,
+                horizontalParam.MaximumValue,
+                horizontalParam.Value
+            );
+
+            var vertical = new CubismParameterXYSlider.AxisParameter(
+                verticalName,
+                verticalParam.MinimumValue,
+                verticalParam.MaximumValue,
+                verticalParam.Value
+            );
+
+            var xySlider = new CubismParameterXYSlider(horizontal, vertical);
+
+            // Configure labels with parameter behavior
+            var labels = xySlider.Query<Label>().ToList();
+            ConfigureParameterLabel(labels[0], horizontalParam);
+            ConfigureParameterLabel(labels[1], verticalParam);
+
+            xySlider.OnValueChanged += value =>
             {
-                Parameters[index].Value = evt.newValue;
-                EditorUtility.SetDirty(Parameters[index]);
+                horizontalParam.Value = value.x;
+                verticalParam.Value = value.y;
+                EditorUtility.SetDirty(horizontalParam);
+                EditorUtility.SetDirty(verticalParam);
                 UpdateModel();
-            });
+            };
+
+            container.Add(xySlider);
         }
 
         #endregion
@@ -229,24 +407,9 @@ namespace Live2D.Cubism.Editor.Inspectors
             Parameters = (target as Component)
                 .FindCubismModel(true)
                 .Parameters;
-
-            ParametersNameFromJson = new string[Parameters.Length];
-
-            for (var i = 0; i < Parameters.Length; i++)
-            {
-                var displayInfoParameterName = Parameters[i].GetComponent<CubismDisplayInfoParameterName>();
-                if (displayInfoParameterName == null)
-                {
-                    ParametersNameFromJson[i] = string.Empty;
-                    continue;
-                }
-
-                ParametersNameFromJson[i] = string.IsNullOrEmpty(displayInfoParameterName.DisplayName)
-                    ? displayInfoParameterName.Name
-                    : displayInfoParameterName.DisplayName;
-            }
         }
 
         #endregion
     }
 }
+

@@ -27,4 +27,97 @@ InspectorElement.unity-inspector-element__custom-inspector-container {
 .ctrl-pressed .parameter-label:hover:active {
     cursor: zoom;
     color: #1976D2;
+}
+
+.parameter-group {
+    margin-bottom: 8px;
+    background-color: var(--unity-colors-inspector_titlebar-background);
+    border-radius: 3px;
+}
+
+.parameter-group .unity-foldout__toggle {
+    margin: 0;
+    padding: 4px 8px;
+}
+
+.parameter-group .unity-foldout__content {
+    padding: 8px;
+    background-color: var(--unity-colors-inspector-background);
+}
+
+.unity-slider {
+    margin-bottom: 4px;
+}
+
+.parameter-slider {
+    margin-left: 4px;
+}
+
+.xy-slider-root {
+    flex-direction: row;
+    align-items: center;
+}
+
+.xy-slider-labels {
+    flex-direction: column;
+    width: 150px;
+    margin-right: 8px;
+}
+
+.xy-slider-label {
+    margin: 2px 0;
+    -unity-text-align: middle-left;
+}
+
+.xy-slider-container {
+    width: 150px;
+    height: 150px;
+    position: relative;
+    border-width: 1px;
+    border-color: var(--unity-colors-default-border);
+    border-radius: 3px;
+    background-color: var(--unity-colors-inspector_titlebar-background);
+}
+
+.xy-slider-center-line-h {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    background-color: var(--unity-colors-default-border);
+    opacity: 0.5;
+}
+
+.xy-slider-center-line-v {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background-color: var(--unity-colors-default-border);
+    opacity: 0.5;
+}
+
+.xy-slider-grid {
+    background-image: 
+        linear-gradient(to right, var(--unity-colors-default-border) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--unity-colors-default-border) 1px, transparent 1px);
+    background-size: 25% 25%;
+    opacity: 0.2;
+}
+
+.xy-slider-handle {
+    background-color: var(--unity-colors-slider_thumb-background);
+    border-radius: 50%;
+    border-width: 1px;
+    border-color: var(--unity-colors-slider_thumb-border);
+}
+
+.xy-slider-handle:hover {
+    background-color: var(--unity-colors-slider_thumb-background-hover);
+}
+
+.xy-slider-handle:active {
+    background-color: var(--unity-colors-slider_thumb-background-pressed);
 } 

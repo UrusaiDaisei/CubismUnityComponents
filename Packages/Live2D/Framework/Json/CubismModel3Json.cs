@@ -442,29 +442,6 @@ namespace Live2D.Cubism.Framework.Json
                     displayInfoComponent.DisplayName = foundPart.Name;
                 }
             }
-
-            // Initialize combined parameters if display info exists
-            if (displayInfo?.CombinedParameters != null)
-            {
-                const int combinedParameterCount = 2;
-                var combinedParameterInfo = model.gameObject.AddComponent<CubismDisplayInfoCombinedParameterInfo>();
-                combinedParameterInfo.CombinedParameters = new CubismDisplayInfo3Json.CombinedParameter[displayInfo.CombinedParameters.Length];
-
-                for (var i = 0; i < displayInfo.CombinedParameters.Length; i++)
-                {
-                    if (displayInfo.CombinedParameters[i].Ids == null || displayInfo.CombinedParameters[i].Ids.Length != combinedParameterCount)
-                    {
-                        Debug.LogWarning($"The data contains invalid CombinedParameters in {model.Moc.name}.cdi3.json.");
-                        continue;
-                    }
-
-                    combinedParameterInfo.CombinedParameters[i] = new CubismDisplayInfo3Json.CombinedParameter
-                    {
-                        HorizontalParameterId = displayInfo.CombinedParameters[i].Ids[0],
-                        VerticalParameterId = displayInfo.CombinedParameters[i].Ids[1]
-                    };
-                }
-            }
         }
 
         private void InitializeParameters(CubismModel model, CubismDisplayInfo3Json displayInfo)
@@ -498,6 +475,30 @@ namespace Live2D.Cubism.Framework.Json
 
             // Get Parameters container (created by model)
             var parametersContainer = model.transform.Find("Parameters").gameObject;
+
+            // Initialize combined parameters if display info exists
+            if (displayInfo?.CombinedParameters != null)
+            {
+                const int combinedParameterCount = 2;
+                var combinedParameterInfo = parametersContainer.AddComponent<CubismDisplayInfoCombinedParameterInfo>();
+                combinedParameterInfo.CombinedParameters = new CubismDisplayInfo3Json.CombinedParameter[displayInfo.CombinedParameters.Length];
+
+                for (var i = 0; i < displayInfo.CombinedParameters.Length; i++)
+                {
+                    if (displayInfo.CombinedParameters[i].Ids == null || displayInfo.CombinedParameters[i].Ids.Length != combinedParameterCount)
+                    {
+                        Debug.LogWarning($"The data contains invalid CombinedParameters in {model.Moc.name}.cdi3.json.");
+                        continue;
+                    }
+
+                    combinedParameterInfo.CombinedParameters[i] = new CubismDisplayInfo3Json.CombinedParameter
+                    {
+                        HorizontalParameterId = displayInfo.CombinedParameters[i].Ids[0],
+                        VerticalParameterId = displayInfo.CombinedParameters[i].Ids[1]
+                    };
+                }
+            }
+
             var groupsManager = parametersContainer.AddComponent<CubismParameterGroups>();
 
             // Group parameters by their GroupId

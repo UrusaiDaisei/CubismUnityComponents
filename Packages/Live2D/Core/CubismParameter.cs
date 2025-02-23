@@ -45,7 +45,7 @@ namespace Live2D.Cubism.Core
 
 
                 buffer[i].transform.SetParent(root.transform);
-                buffer[i].Reset(unmanagedModel, i);
+                buffer[i].ResetParameter(unmanagedModel, i);
             }
 
 
@@ -157,10 +157,9 @@ namespace Live2D.Cubism.Core
         /// </summary>
         /// <param name="unmanagedModel">Handle to unmanaged model.</param>
         /// <param name="unmanagedIndex">Position in unmanaged arrays.</param>
-        private void Reset(CubismUnmanagedModel unmanagedModel, int unmanagedIndex)
+        private void ResetParameter(CubismUnmanagedModel unmanagedModel, int unmanagedIndex)
         {
             Revive(unmanagedModel);
-
 
             UnmanagedIndex = unmanagedIndex;
             name = Id;

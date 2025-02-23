@@ -12,6 +12,12 @@ using UnityEngine;
 public class CubismDisplayInfoCombinedParameterInfo : MonoBehaviour
 {
     /// <summary>
+    /// backing field for <see cref="CombinedParameters"/>.
+    /// </summary>
+    [SerializeField]
+    private CubismDisplayInfo3Json.CombinedParameter[] combinedParameters;
+
+    /// <summary>
     /// Combined parameters from .cdi3.json.
     /// </summary>
     public CubismDisplayInfo3Json.CombinedParameter[] CombinedParameters
@@ -20,14 +26,9 @@ public class CubismDisplayInfoCombinedParameterInfo : MonoBehaviour
         {
             return combinedParameters;
         }
-        set
+        internal set
         {
             combinedParameters = value;
         }
     }
-
-    /// <summary>
-    /// backing field for <see cref="CombinedParameters"/>.
-    /// </summary>
-    private CubismDisplayInfo3Json.CombinedParameter[] combinedParameters;
 }
