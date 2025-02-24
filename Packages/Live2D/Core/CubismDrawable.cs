@@ -19,6 +19,41 @@ namespace Live2D.Cubism.Core
     [CubismDontMoveOnReimport]
     public sealed class CubismDrawable : MonoBehaviour
     {
+        #region Fields
+
+        /// <summary>
+        /// <see cref="UnmanagedIndex"/> backing field.
+        /// </summary>
+        [SerializeField, HideInInspector]
+        private int _unmanagedIndex = -1;
+
+        /// <summary>
+        /// <see cref="MultiplyColor"/> backing field.
+        /// </summary>
+        private Color _multiplyColor;
+
+        /// <summary>
+        /// <see cref="ScreenColor"/> backing field.
+        /// </summary>
+        public Color _screenColor;
+
+        #endregion
+
+        #region Runtime
+
+        /// <summary>
+        /// Unmanaged drawables from unmanaged model.
+        /// </summary>
+        private CubismUnmanagedDrawables UnmanagedDrawables { get; set; }
+
+        private Vector3[] _cachedVertexPositions;
+        private Vector2[] _cachedVertexUvs;
+        private int[] _cachedIndices;
+        private CubismDrawable[] _cachedMasks;
+        private bool _isVertexPositionsDirty = true;
+
+        #endregion
+
         #region Factory Methods
 
         /// <summary>
@@ -30,88 +65,41 @@ namespace Live2D.Cubism.Core
         {
             var root = new GameObject("Drawables");
 
-
             // Create drawables.
             var unmanagedDrawables = unmanagedModel.Drawables;
             var buffer = new CubismDrawable[unmanagedDrawables.Count];
-
 
             for (var i = 0; i < buffer.Length; ++i)
             {
                 var proxy = new GameObject();
 
-
                 buffer[i] = proxy.AddComponent<CubismDrawable>();
-
 
                 buffer[i].transform.SetParent(root.transform);
                 buffer[i].Reset(unmanagedModel, i);
             }
-
 
             return root;
         }
 
         #endregion
 
-
-        /// <summary>
-        /// Unmanaged drawables from unmanaged model.
-        /// </summary>
-        private CubismUnmanagedDrawables UnmanagedDrawables { get; set; }
-
-
-        /// <summary>
-        /// <see cref="UnmanagedIndex"/> backing field.
-        /// </summary>
-        [SerializeField, HideInInspector]
-        private int _unmanagedIndex = -1;
-
-        /// <summary>
-        /// Position in unmanaged arrays.
-        /// </summary>
-        internal int UnmanagedIndex
-        {
-            get { return _unmanagedIndex; }
-            private set { _unmanagedIndex = value; }
-        }
+        #region Public Methods and Structs
 
         /// <summary>
         /// Parent Part Position in unmanaged arrays.
         /// </summary>
-        public int UnmanagedParentIndex
-        {
-            get { return UnmanagedDrawables.ParentPartIndices[UnmanagedIndex]; }
-        }
+        public int UnmanagedParentIndex => UnmanagedDrawables.ParentPartIndices[UnmanagedIndex];
 
         /// <summary>
         /// Copy of Id.
         /// </summary>
-        public string Id
-        {
-            get
-            {
-                // Pull data.
-                return UnmanagedDrawables.Ids[UnmanagedIndex];
-            }
-        }
+        public string Id => UnmanagedDrawables.Ids[UnmanagedIndex];
 
         /// <summary>
         /// Texture UnmanagedIndex.
         /// </summary>
-        public int TextureIndex
-        {
-            get
-            {
-                // Pull data.
-                return UnmanagedDrawables.TextureIndices[UnmanagedIndex];
-            }
-        }
-
-        /// <summary>
-        /// <see cref="MultiplyColor"/> backing field.
-        /// </summary>
-        private Color _multiplyColor;
+        public int TextureIndex => UnmanagedDrawables.TextureIndices[UnmanagedIndex];
 
         /// <summary>
         /// Copy of MultiplyColor.
@@ -121,21 +109,13 @@ namespace Live2D.Cubism.Core
             get
             {
                 var index = UnmanagedIndex * 4;
-
-                // Pull data.
                 _multiplyColor.r = UnmanagedDrawables.MultiplyColors[index];
                 _multiplyColor.g = UnmanagedDrawables.MultiplyColors[index + 1];
                 _multiplyColor.b = UnmanagedDrawables.MultiplyColors[index + 2];
                 _multiplyColor.a = UnmanagedDrawables.MultiplyColors[index + 3];
-
                 return _multiplyColor;
             }
         }
-
-        /// <summary>
-        /// <see cref="ScreenColor"/> backing field.
-        /// </summary>
-        public Color _screenColor;
 
         /// <summary>
         /// Copy of ScreenColor.
@@ -145,71 +125,157 @@ namespace Live2D.Cubism.Core
             get
             {
                 var index = UnmanagedIndex * 4;
-
-                // Pull data.
                 _screenColor.r = UnmanagedDrawables.ScreenColors[index];
                 _screenColor.g = UnmanagedDrawables.ScreenColors[index + 1];
                 _screenColor.b = UnmanagedDrawables.ScreenColors[index + 2];
                 _screenColor.a = UnmanagedDrawables.ScreenColors[index + 3];
-
-                return _screenColor; ;
+                return _screenColor;
             }
         }
 
-        /// <summary>
-        /// Index of Parent Part.
-        /// </summary>
         public int ParentPartIndex
         {
             get
             {
-                // Pull data.
                 return UnmanagedDrawables.ParentPartIndices[UnmanagedIndex];
             }
         }
 
+        #endregion
+
+        #region Internal Methods and Structs
+
         /// <summary>
-        /// Copy of the masks.
+        /// Position in unmanaged arrays.
         /// </summary>
-        public CubismDrawable[] Masks
+        internal int UnmanagedIndex
         {
-            get
+            get => _unmanagedIndex;
+            private set => _unmanagedIndex = value;
+        }
+
+        internal void SetVertexPositionsDirty()
+        {
+            _isVertexPositionsDirty = true;
+        }
+
+        /// <summary>
+        /// Revives instance.
+        /// </summary>
+        /// <param name="unmanagedModel">Handle to unmanaged model.</param>
+        internal void Revive(CubismUnmanagedModel unmanagedModel)
+        {
+            UnmanagedDrawables = unmanagedModel.Drawables;
+            _isVertexPositionsDirty = true;
+        }
+
+        #endregion
+
+        #region Auxiliary Code
+
+        private void InitializeVertexPositions()
+        {
+            if (_cachedVertexPositions != null) return;
+
+            var vertexCount = UnmanagedDrawables.VertexCounts[UnmanagedIndex];
+            _cachedVertexPositions = new Vector3[vertexCount];
+            _isVertexPositionsDirty = true;
+        }
+
+        private void InitializeUvs()
+        {
+            if (_cachedVertexUvs != null) return;
+
+            var vertexCount = UnmanagedDrawables.VertexCounts[UnmanagedIndex];
+            var uvs = UnmanagedDrawables.VertexUvs[UnmanagedIndex];
+
+            _cachedVertexUvs = new Vector2[vertexCount];
+            for (var i = 0; i < vertexCount; i++)
             {
-                var drawables = this
-                    .FindCubismModel(true)
-                    .Drawables;
-
-
-                // Get addresses.
-                var counts = UnmanagedDrawables.MaskCounts;
-                var indices = UnmanagedDrawables.Masks;
-
-
-                // Pull data.
-                var buffer = new CubismDrawable[counts[UnmanagedIndex]];
-
-
-                for (var i = 0; i < buffer.Length; ++i)
-                {
-                    for (var j = 0; j < drawables.Length; ++j)
-                    {
-                        if (drawables[j].UnmanagedIndex != indices[UnmanagedIndex][i])
-                        {
-                            continue;
-                        }
-
-
-                        buffer[i] = drawables[j];
-
-
-                        break;
-                    }
-                }
-
-
-                return buffer;
+                var baseIndex = i * 2;
+                _cachedVertexUvs[i] = new Vector2(
+                    uvs[baseIndex],
+                    uvs[baseIndex + 1]
+                );
             }
         }
+
+        private void InitializeIndices()
+        {
+            if (_cachedIndices != null) return;
+
+            var indexCount = UnmanagedDrawables.IndexCounts[UnmanagedIndex];
+            var indices = UnmanagedDrawables.Indices[UnmanagedIndex];
+
+            _cachedIndices = new int[indexCount];
+            for (var i = 0; i < indexCount; i++)
+            {
+                _cachedIndices[i] = indices[i];
+            }
+        }
+
+        private void InitializeMasks()
+        {
+            if (_cachedMasks != null) return;
+
+            var drawables = this.FindCubismModel(true).Drawables;
+            var counts = UnmanagedDrawables.MaskCounts;
+            var indices = UnmanagedDrawables.Masks;
+
+            _cachedMasks = new CubismDrawable[counts[UnmanagedIndex]];
+
+            for (var i = 0; i < _cachedMasks.Length; ++i)
+            {
+                for (var j = 0; j < drawables.Length; ++j)
+                {
+                    if (drawables[j].UnmanagedIndex != indices[UnmanagedIndex][i])
+                    {
+                        continue;
+                    }
+
+                    _cachedMasks[i] = drawables[j];
+                    break;
+                }
+            }
+        }
+
+        private void UpdateVertexPositions()
+        {
+            if (!_isVertexPositionsDirty) return;
+
+            var positions = UnmanagedDrawables.VertexPositions[UnmanagedIndex];
+
+            for (var i = 0; i < _cachedVertexPositions.Length; i++)
+            {
+                var baseIndex = i * 2;
+                _cachedVertexPositions[i] = new Vector3(
+                    positions[baseIndex],
+                    positions[baseIndex + 1]
+                );
+            }
+
+            _isVertexPositionsDirty = false;
+        }
+
+        /// <summary>
+        /// Restores instance to initial state.
+        /// </summary>
+        /// <param name="unmanagedModel">Handle to unmanaged model.</param>
+        /// <param name="unmanagedIndex">Position in unmanaged arrays.</param>
+        private void Reset(CubismUnmanagedModel unmanagedModel, int unmanagedIndex)
+        {
+            Revive(unmanagedModel);
+            UnmanagedIndex = unmanagedIndex;
+            name = Id;
+
+            // Clear cache to force reinitialization
+            _cachedVertexPositions = null;
+            _cachedVertexUvs = null;
+            _cachedIndices = null;
+            _cachedMasks = null;
+        }
+
+        #endregion
 
         /// <summary>
         /// Copy of vertex positions.
@@ -218,25 +284,9 @@ namespace Live2D.Cubism.Core
         {
             get
             {
-                // Get addresses.
-                var counts = UnmanagedDrawables.VertexCounts;
-                var positions = UnmanagedDrawables.VertexPositions;
-
-
-                // Pull data.
-                var buffer = new Vector3[counts[UnmanagedIndex]];
-
-
-                for (var i = 0; i < buffer.Length; ++i)
-                {
-                    buffer[i] = new Vector3(
-                        positions[UnmanagedIndex][(i * 2) + 0],
-                        positions[UnmanagedIndex][(i * 2) + 1]
-                    );
-                }
-
-
-                return buffer;
+                InitializeVertexPositions();
+                UpdateVertexPositions();
+                return _cachedVertexPositions;
             }
         }
 
@@ -247,25 +297,8 @@ namespace Live2D.Cubism.Core
         {
             get
             {
-                // Get addresses.
-                var counts = UnmanagedDrawables.VertexCounts;
-                var uvs = UnmanagedDrawables.VertexUvs;
-
-
-                // Pull data.
-                var buffer = new Vector2[counts[UnmanagedIndex]];
-
-
-                for (var i = 0; i < buffer.Length; ++i)
-                {
-                    buffer[i] = new Vector2(
-                        uvs[UnmanagedIndex][(i * 2) + 0],
-                        uvs[UnmanagedIndex][(i * 2) + 1]
-                    );
-                }
-
-
-                return buffer;
+                InitializeUvs();
+                return _cachedVertexUvs;
             }
         }
 
@@ -276,25 +309,22 @@ namespace Live2D.Cubism.Core
         {
             get
             {
-                // Get addresses.
-                var counts = UnmanagedDrawables.IndexCounts;
-                var indices = UnmanagedDrawables.Indices;
-
-
-                // Pull data.
-                var buffer = new int[counts[UnmanagedIndex]];
-
-
-                for (var i = 0; i < buffer.Length; ++i)
-                {
-                    buffer[i] = indices[UnmanagedIndex][i];
-                }
-
-
-                return buffer;
+                InitializeIndices();
+                return _cachedIndices;
             }
         }
 
+        /// <summary>
+        /// Copy of the masks.
+        /// </summary>
+        public CubismDrawable[] Masks
+        {
+            get
+            {
+                InitializeMasks();
+                return _cachedMasks;
+            }
+        }
 
         /// <summary>
         /// True if double-sided.
@@ -305,7 +335,6 @@ namespace Live2D.Cubism.Core
             {
                 // Get address.
                 var flags = UnmanagedDrawables.ConstantFlags;
-
 
                 // Pull data.
                 return flags[UnmanagedIndex].HasIsDoubleSidedFlag();
@@ -322,7 +351,6 @@ namespace Live2D.Cubism.Core
                 // Get address.
                 var counts = UnmanagedDrawables.MaskCounts;
 
-
                 // Pull data.
                 return counts[UnmanagedIndex] > 0;
             }
@@ -337,7 +365,6 @@ namespace Live2D.Cubism.Core
             {
                 // Get address.
                 var flags = UnmanagedDrawables.ConstantFlags;
-
 
                 // Pull data.
                 return flags[UnmanagedIndex].HasIsInvertedMaskFlag();
@@ -354,7 +381,6 @@ namespace Live2D.Cubism.Core
                 // Get address.
                 var flags = UnmanagedDrawables.ConstantFlags;
 
-
                 // Pull data.
                 return flags[UnmanagedIndex].HasBlendAdditiveFlag();
             }
@@ -370,32 +396,9 @@ namespace Live2D.Cubism.Core
                 // Get address.
                 var flags = UnmanagedDrawables.ConstantFlags;
 
-
                 // Pull data.
                 return flags[UnmanagedIndex].HasBlendMultiplicativeFlag();
             }
-        }
-
-        /// <summary>
-        /// Revives instance.
-        /// </summary>
-        /// <param name="unmanagedModel">Handle to unmanaged model.</param>
-        internal void Revive(CubismUnmanagedModel unmanagedModel)
-        {
-            UnmanagedDrawables = unmanagedModel.Drawables;
-        }
-
-        /// <summary>
-        /// Restores instance to initial state.
-        /// </summary>
-        /// <param name="unmanagedModel">Handle to unmanaged model.</param>
-        /// <param name="unmanagedIndex">Position in unmanaged arrays.</param>
-        private void Reset(CubismUnmanagedModel unmanagedModel, int unmanagedIndex)
-        {
-            Revive(unmanagedModel);
-
-            UnmanagedIndex = unmanagedIndex;
-            name = Id;
         }
     }
 }

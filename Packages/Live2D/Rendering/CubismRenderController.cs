@@ -823,21 +823,17 @@ namespace Live2D.Cubism.Rendering
             var drawables = sender.Drawables;
             var renderers = Renderers;
 
-
             // Handle render data changes.
             for (var i = 0; i < data.Length; ++i)
             {
                 // Controls whether mesh buffers are to be swapped.
                 var swapMeshes = false;
 
-
                 // Update visibility if last SwapInfo flag is true.
                 renderers[i].UpdateVisibility();
 
-
                 // Update render order if last SwapInfo flags is true.
                 renderers[i].UpdateRenderOrder();
-
 
                 // Skip completely non-dirty data.
                 if (!data[i].IsAnyDirty)
@@ -845,45 +841,37 @@ namespace Live2D.Cubism.Rendering
                     continue;
                 }
 
-
                 // Update visibility.
                 if (data[i].IsVisibilityDirty)
                 {
                     renderers[i].OnDrawableVisiblityDidChange(data[i].IsVisible);
-
                     swapMeshes = true;
                 }
-
 
                 // Update render order.
                 if (data[i].IsRenderOrderDirty)
                 {
                     renderers[i].OnDrawableRenderOrderDidChange(data[i].RenderOrder);
-
-
                     swapMeshes = true;
                 }
-
 
                 // Update opacity.
                 if (data[i].IsOpacityDirty)
                 {
                     renderers[i].OnDrawableOpacityDidChange(data[i].Opacity);
-
-
                     swapMeshes = true;
                 }
-
 
                 // Update vertex positions.
                 if (data[i].AreVertexPositionsDirty)
                 {
+                    // Mark drawable's vertex positions as dirty
+                    drawables[i].SetVertexPositionsDirty();
+
+                    // Update renderer
                     renderers[i].OnDrawableVertexPositionsDidChange(data[i].VertexPositions);
-
-
                     swapMeshes = true;
                 }
-
 
                 // Swap buffers if necessary.
                 // [INV] Swapping only half of the meshes might improve performance even. Would that be visually feasible?
@@ -893,10 +881,8 @@ namespace Live2D.Cubism.Rendering
                 }
             }
 
-
             // Pass draw order changes to handler (if available).
             var drawOrderHandler = DrawOrderHandlerInterface;
-
 
             if (drawOrderHandler != null)
             {
