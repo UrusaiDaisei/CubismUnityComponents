@@ -20,14 +20,18 @@ namespace Live2D.Cubism.Editor.Inspectors
         private const float CrosshairSize = 0.3f;
         private const float RangeHandleSize = 0.15f;
         private const float RangeArrowSize = 0.3f;
+        private const float TestButtonSize = 0.15f;
+        private const float TestButtonOffset = 0.3f;
         private readonly Color HandleColor = new Color(0f, 1f, 1f, 0.8f);
         private readonly Color SelectedColor = new Color(1f, 1f, 0f, 0.8f);
         private readonly Color RangeColor = new Color(0f, 1f, 0.5f, 0.8f);
+        private readonly Color TestButtonColor = new Color(0f, 0.8f, 0.2f, 0.8f);
 
         // Control IDs for handle interaction
         private int _centerPointControlID;
         private int _minDistanceControlID;
         private int _maxDistanceControlID;
+        private int _testButtonControlID;
         private bool _isDragging;
         private bool _isTestingMode;
         private float _originalParameterValue;
@@ -60,21 +64,29 @@ namespace Live2D.Cubism.Editor.Inspectors
             var minPoint = centerPoint + axisDirection * lookParameter.MinDistance;
             var maxPoint = centerPoint + axisDirection * lookParameter.MaxDistance;
 
-            if (_isTestingMode)
-            {
-                HandleTestingMode(lookParameter);
-                DrawRangeHandles(centerPoint, minPoint, maxPoint, axisDirection, true);
-                SceneView.RepaintAll();
-                return;
-            }
-
             // Get control IDs
             _centerPointControlID = GUIUtility.GetControlID(FocusType.Passive);
             _minDistanceControlID = GUIUtility.GetControlID(FocusType.Passive);
             _maxDistanceControlID = GUIUtility.GetControlID(FocusType.Passive);
+            _testButtonControlID = GUIUtility.GetControlID(FocusType.Passive);
 
             // Handle different event types
             var evt = Event.current;
+
+            // Check for mouse up anywhere (including outside scene view)
+            if ((evt.type == EventType.MouseUp || evt.rawType == EventType.MouseUp) && _isDragging)
+            {
+                if (_isTestingMode)
+                {
+                    RestoreParameterValue();
+                }
+                GUIUtility.hotControl = 0;
+                _isDragging = false;
+                evt.Use();
+                SceneView.RepaintAll();
+                return;
+            }
+
             switch (evt.GetTypeForControl(_centerPointControlID))
             {
                 case EventType.MouseDown:
@@ -85,26 +97,31 @@ namespace Live2D.Cubism.Editor.Inspectors
                 case EventType.MouseDrag:
                     if (_isDragging)
                     {
-                        Undo.RecordObject(target, GUIUtility.hotControl == _centerPointControlID ?
-                            "Move Center Point" : "Adjust Range");
-
-                        if (HandleMouseDrag(evt, lookParameter, transform, axisDirection))
+                        if (_isTestingMode)
+                        {
+                            HandleTestingMode(lookParameter);
                             evt.Use();
-                    }
-                    break;
+                        }
+                        else
+                        {
+                            Undo.RecordObject(target, GUIUtility.hotControl == _centerPointControlID ?
+                                "Move Center Point" : "Adjust Range");
 
-                case EventType.MouseUp:
-                    if (_isDragging)
-                    {
-                        GUIUtility.hotControl = 0;
-                        _isDragging = false;
-                        evt.Use();
-                        SceneView.RepaintAll();
+                            if (HandleMouseDrag(evt, lookParameter, transform, axisDirection))
+                                evt.Use();
+                        }
                     }
                     break;
 
                 case EventType.Repaint:
-                    DrawHandles(centerPoint, minPoint, maxPoint, axisDirection);
+                    if (_isTestingMode)
+                    {
+                        DrawRangeHandles(centerPoint, minPoint, maxPoint, axisDirection, true);
+                    }
+                    else
+                    {
+                        DrawHandles(centerPoint, minPoint, maxPoint, axisDirection);
+                    }
                     break;
             }
         }
@@ -128,6 +145,22 @@ namespace Live2D.Cubism.Editor.Inspectors
             if (evt.button != 0) return false;
 
             float screenSize = HandleUtility.GetHandleSize(centerPoint);
+
+            // Check test button
+            var testButtonPos = centerPoint + Vector3.down * screenSize * TestButtonOffset;
+            float testButtonDistance = HandleUtility.DistanceToCircle(testButtonPos, screenSize * TestButtonSize);
+            if (testButtonDistance < 10f)
+            {
+                _isDragging = true;
+                _isTestingMode = true;
+                GUIUtility.hotControl = _testButtonControlID;
+                var lookParameter = target as AdvancedLookParameter;
+                if (lookParameter != null)
+                {
+                    _originalParameterValue = lookParameter.Parameter.Value;
+                }
+                return true;
+            }
 
             // Check center point
             float centerDistance = HandleUtility.DistanceToCircle(centerPoint, screenSize * HandleSize);
@@ -197,13 +230,23 @@ namespace Live2D.Cubism.Editor.Inspectors
                         // Move handles in opposite directions
                         if (isMinHandle)
                         {
-                            lookParameter.MinDistance = projectedDistance;
-                            lookParameter.MaxDistance -= delta;
+                            var newMin = projectedDistance;
+                            var newMax = lookParameter.MaxDistance - delta;
+                            if (newMin <= newMax)
+                            {
+                                lookParameter.MinDistance = newMin;
+                                lookParameter.MaxDistance = newMax;
+                            }
                         }
                         else
                         {
-                            lookParameter.MaxDistance = projectedDistance;
-                            lookParameter.MinDistance -= delta;
+                            var newMax = projectedDistance;
+                            var newMin = lookParameter.MinDistance - delta;
+                            if (newMin <= newMax)
+                            {
+                                lookParameter.MaxDistance = newMax;
+                                lookParameter.MinDistance = newMin;
+                            }
                         }
                     }
                     else if (evt.shift)
@@ -216,9 +259,21 @@ namespace Live2D.Cubism.Editor.Inspectors
                     {
                         // Normal single handle movement
                         if (isMinHandle)
-                            lookParameter.MinDistance = projectedDistance;
+                        {
+                            var newMin = projectedDistance;
+                            if (newMin <= lookParameter.MaxDistance)
+                            {
+                                lookParameter.MinDistance = newMin;
+                            }
+                        }
                         else
-                            lookParameter.MaxDistance = projectedDistance;
+                        {
+                            var newMax = projectedDistance;
+                            if (lookParameter.MinDistance <= newMax)
+                            {
+                                lookParameter.MaxDistance = newMax;
+                            }
+                        }
                     }
                     return true;
                 }
@@ -249,6 +304,37 @@ namespace Live2D.Cubism.Editor.Inspectors
                 Handles.DrawSolidDisc(centerPoint, Vector3.forward, screenSize * HandleSize * 0.5f);
             }
 
+            // Draw test button (Unity style button look)
+            var testButtonPos = centerPoint + Vector3.down * screenSize * TestButtonOffset;
+            Handles.BeginGUI();
+
+            // Convert world position to screen position
+            var screenPos = HandleUtility.WorldToGUIPoint(testButtonPos);
+
+            // Create centered rect around the screen position
+            var buttonWidth = 50;
+            var buttonHeight = 20;
+            var rect = new Rect(
+                screenPos.x - buttonWidth * 0.5f,
+                screenPos.y - buttonHeight * 0.5f,
+                buttonWidth,
+                buttonHeight
+            );
+
+            // Draw button with Unity style
+            if (GUI.Button(rect, "Test", EditorStyles.miniButton))
+            {
+                _isDragging = true;
+                _isTestingMode = true;
+                GUIUtility.hotControl = _testButtonControlID;
+                var lookParameter = target as AdvancedLookParameter;
+                if (lookParameter != null)
+                {
+                    _originalParameterValue = lookParameter.Parameter.Value;
+                }
+            }
+            Handles.EndGUI();
+
             DrawRangeHandles(centerPoint, minPoint, maxPoint, axisDirection, false);
         }
 
@@ -260,34 +346,58 @@ namespace Live2D.Cubism.Editor.Inspectors
             Handles.color = Color.gray;
             Handles.DrawDottedLine(minPoint, maxPoint, 4f);
 
-            // Draw min distance handle
-            using (new Handles.DrawingScope(isTestMode ? RangeColor :
-                (GUIUtility.hotControl == _minDistanceControlID ? SelectedColor : RangeColor)))
+            if (isTestMode)
             {
-                // Draw arrow pointing inward
-                var right = Vector3.Cross(axisDirection, Vector3.forward).normalized;
-                var arrowSize = screenSize * RangeArrowSize;
-                var arrowTip = minPoint;
-                var arrowBase = minPoint - axisDirection * arrowSize;
+                // Draw simplified semi-circle handles in test mode
+                using (new Handles.DrawingScope(RangeColor))
+                {
+                    // Min handle
+                    var right = Vector3.Cross(axisDirection, Vector3.forward).normalized;
+                    Handles.DrawWireArc(minPoint, Vector3.forward, right, 180f, screenSize * RangeHandleSize);
 
-                Handles.DrawLine(arrowTip, arrowBase);
-                Handles.DrawLine(arrowTip, arrowBase + right * arrowSize * 0.5f);
-                Handles.DrawLine(arrowTip, arrowBase - right * arrowSize * 0.5f);
+                    // Max handle
+                    Handles.DrawWireArc(maxPoint, Vector3.forward, -right, 180f, screenSize * RangeHandleSize);
+                }
             }
-
-            // Draw max distance handle
-            using (new Handles.DrawingScope(isTestMode ? RangeColor :
-                (GUIUtility.hotControl == _maxDistanceControlID ? SelectedColor : RangeColor)))
+            else
             {
-                // Draw arrow pointing outward
-                var right = Vector3.Cross(axisDirection, Vector3.forward).normalized;
-                var arrowSize = screenSize * RangeArrowSize;
-                var arrowTip = maxPoint;
-                var arrowBase = maxPoint + axisDirection * arrowSize;
+                // Draw min distance handle
+                using (new Handles.DrawingScope(GUIUtility.hotControl == _minDistanceControlID ? SelectedColor : RangeColor))
+                {
+                    // Draw handle circle
+                    Handles.DrawWireDisc(minPoint, Vector3.forward, screenSize * RangeHandleSize);
+                    Handles.DrawSolidDisc(minPoint, Vector3.forward, screenSize * RangeHandleSize * 0.8f);
 
-                Handles.DrawLine(arrowTip, arrowBase);
-                Handles.DrawLine(arrowTip, arrowBase + right * arrowSize * 0.5f);
-                Handles.DrawLine(arrowTip, arrowBase - right * arrowSize * 0.5f);
+                    // Draw direction indicator (arrow pointing inward)
+                    var right = Vector3.Cross(axisDirection, Vector3.forward).normalized;
+                    var arrowSize = screenSize * RangeArrowSize * 0.8f;
+                    var arrowOffset = screenSize * RangeHandleSize * 0.5f;
+                    var arrowTip = minPoint + axisDirection * arrowOffset;
+                    var arrowBase = arrowTip + axisDirection * arrowSize;
+
+                    Handles.DrawLine(arrowTip, arrowBase, 3f);
+                    Handles.DrawLine(arrowTip, arrowBase + right * arrowSize * 0.5f, 3f);
+                    Handles.DrawLine(arrowTip, arrowBase - right * arrowSize * 0.5f, 3f);
+                }
+
+                // Draw max distance handle
+                using (new Handles.DrawingScope(GUIUtility.hotControl == _maxDistanceControlID ? SelectedColor : RangeColor))
+                {
+                    // Draw handle circle
+                    Handles.DrawWireDisc(maxPoint, Vector3.forward, screenSize * RangeHandleSize);
+                    Handles.DrawSolidDisc(maxPoint, Vector3.forward, screenSize * RangeHandleSize * 0.8f);
+
+                    // Draw direction indicator (arrow pointing outward)
+                    var right = Vector3.Cross(axisDirection, Vector3.forward).normalized;
+                    var arrowSize = screenSize * RangeArrowSize * 0.8f;
+                    var arrowOffset = screenSize * RangeHandleSize * 0.5f;
+                    var arrowTip = maxPoint - axisDirection * arrowOffset;
+                    var arrowBase = arrowTip - axisDirection * arrowSize;
+
+                    Handles.DrawLine(arrowTip, arrowBase, 3f);
+                    Handles.DrawLine(arrowTip, arrowBase + right * arrowSize * 0.5f, 3f);
+                    Handles.DrawLine(arrowTip, arrowBase - right * arrowSize * 0.5f, 3f);
+                }
             }
         }
 
@@ -339,29 +449,37 @@ namespace Live2D.Cubism.Editor.Inspectors
             _root = visualTree.CloneTree();
             ApplyStyles();
 
-            // Add test mode toggle handling
-            var testModeToggle = _root.Q<Toggle>("test-mode-toggle");
-            if (testModeToggle != null)
+            // Add validation for min/max distance fields
+            var minDistanceField = _root.Q<PropertyField>("min-distance");
+            var maxDistanceField = _root.Q<PropertyField>("max-distance");
+
+            if (minDistanceField != null && maxDistanceField != null)
             {
-                testModeToggle.value = _isTestingMode;
-                testModeToggle.RegisterValueChangedCallback(evt =>
+                minDistanceField.RegisterValueChangeCallback(evt =>
                 {
-                    if (evt.newValue != _isTestingMode)
+                    var lookParameter = target as AdvancedLookParameter;
+                    if (lookParameter != null)
                     {
-                        if (evt.newValue)
+                        var newValue = evt.changedProperty.floatValue;
+                        if (newValue > lookParameter.MaxDistance)
                         {
-                            var lookParameter = target as AdvancedLookParameter;
-                            if (lookParameter != null)
-                            {
-                                _originalParameterValue = lookParameter.Parameter.Value;
-                            }
+                            evt.changedProperty.floatValue = lookParameter.MaxDistance;
+                            evt.changedProperty.serializedObject.ApplyModifiedProperties();
                         }
-                        else
+                    }
+                });
+
+                maxDistanceField.RegisterValueChangeCallback(evt =>
+                {
+                    var lookParameter = target as AdvancedLookParameter;
+                    if (lookParameter != null)
+                    {
+                        var newValue = evt.changedProperty.floatValue;
+                        if (newValue < lookParameter.MinDistance)
                         {
-                            RestoreParameterValue();
+                            evt.changedProperty.floatValue = lookParameter.MinDistance;
+                            evt.changedProperty.serializedObject.ApplyModifiedProperties();
                         }
-                        _isTestingMode = evt.newValue;
-                        SceneView.RepaintAll();
                     }
                 });
             }

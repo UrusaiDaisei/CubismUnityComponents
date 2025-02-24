@@ -5,16 +5,13 @@
     xmlns:editor="UnityEditor.UIElements">
     
     <engine:VisualElement style="flex-grow: 1;">
-        <engine:Toggle name="test-mode-toggle" label="Test Mode" tooltip="Enable to test look parameter with mouse position" style="margin: 4px;" />
-        
         <editor:PropertyField name="look-index" binding-path="LookIndex" />
         <editor:PropertyField name="axis" binding-path="Axis" />
         
-        <engine:Foldout text="Look Settings" value="true">
-            <editor:PropertyField name="center-point" binding-path="CenterPoint" />
-            <editor:PropertyField name="min-distance" binding-path="MinDistance" />
-            <editor:PropertyField name="max-distance" binding-path="MaxDistance" />
-        </engine:Foldout>
+        <editor:PropertyField name="center-point" binding-path="CenterPoint" />
+        <editor:PropertyField name="min-distance" binding-path="MinDistance" />
+        <editor:PropertyField name="max-distance" binding-path="MaxDistance" />
+        <editor:PropertyField name="invert" binding-path="Invert" tooltip="Invert axis evaluation" />
     </engine:VisualElement>
     
 </engine:UXML> 

@@ -35,6 +35,12 @@ namespace Live2D.Cubism.Framework.LookAt
         public float MaxDistance = 1.0f;
 
         /// <summary>
+        /// Whether to invert the parameter mapping (min distance maps to max value and vice versa).
+        /// </summary>
+        [SerializeField]
+        public bool Invert = false;
+
+        /// <summary>
         /// The center point for look calculations in local coordinates relative to the model transform.
         /// </summary>
         [SerializeField]
@@ -98,6 +104,12 @@ namespace Live2D.Cubism.Framework.LookAt
 
             // Normalize distance to 0-1 range and apply sign
             float normalizedDistance = Mathf.InverseLerp(MinDistance, MaxDistance, clampedDistance);
+
+            // Apply inversion if needed
+            if (Invert)
+            {
+                normalizedDistance = 1f - normalizedDistance;
+            }
 
             // Remap to parameter's actual range
             return Mathf.Lerp(Parameter.MinimumValue, Parameter.MaximumValue, normalizedDistance);
