@@ -1,0 +1,7 @@
+---
+description: Cursor General Guidelines for code generation and formatting
+globs: 
+---
+- avoid removing comments and anotations unless explicitly requested by the developers.
+    - Comments can still be moved around or rewritten slightly if deemed appropriate, as long as the base context and meaning for the comment doesn't change much.
+    - You can suggest the removal of comments, if you think they are no longer relevant. But always ask permission first.

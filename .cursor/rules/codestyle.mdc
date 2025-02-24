@@ -1,0 +1,43 @@
+---
+description: Global code style guides
+globs: 
+---
+# General code guidelines and best practices
+- Codebase and technical documentations should alway be in english.
+- Frontend UI can be in a different language or utilize any existing I8N frameworks.
+- Check written files for proper spelling and grammar in the repo. Suggest changes as appropriate.
+- Always prefer early function exiting. Avoid heavy closure nestings in functions/methods.
+  - If a functions starts to get too large, split it into smaller functions.
+
+# Unity Code Guidelines
+- In the components, always split the code in the following regions:
+    - Fields
+        - Fields present in the editor
+    - Runtime
+        - Runtime fields that aren't visible in the editor
+    - Unity Methods
+        - Unity specific callbacks
+    - Public Methods and Structs
+        - Public methods and classes/structs
+    - Internal Methods and Structs
+        - Internal/protected methods and classes/structs
+        - Explicit interface implementations
+    - Auxiliary Code
+        - Private methods and classes/structs
+
+# Language-Specific Guidelines
+
+## C# Guidelines
+- Use PascalCase for class names, public properties, and methods
+- Use camelCase for private fields (prefix with _)
+- Use `readonly` where applicable
+- Prefer expression-bodied members for simple methods
+- Use snake_case in uppercase for constants
+- Classes should always be sealed by default
+- Each region start/end should have a whiteline space between it, the code
+
+# Formatting
+- Use 4 spaces for indentation in C#
+- Use 2 spaces for indentation in TS/JS/JSON
+- Maximum line length: 120 characters
+- No trailing whitespace

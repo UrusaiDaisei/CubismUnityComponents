@@ -11,3 +11,5 @@
 !/.editorconfig
 !/.gitignore
 !/*.md
+!/.cursor/**/*
+!/.vscode/**/*
