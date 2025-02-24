@@ -33,6 +33,9 @@ namespace Live2D.Cubism.Editor.Inspectors
         private CubismParameter[] Parameters { get; set; }
         private bool IsInitialized => Parameters != null;
 
+        // Change the field declaration
+        private List<(CubismParameterXYSlider slider, CubismParameter horizontal, CubismParameter vertical)> _xySliderParameters;
+
         #endregion
 
         #region Unity Methods
@@ -140,6 +143,8 @@ namespace Live2D.Cubism.Editor.Inspectors
             {
                 Initialize();
             }
+
+            _xySliderParameters = new List<(CubismParameterXYSlider slider, CubismParameter horizontal, CubismParameter vertical)>();
 
             CreateParameterControls();
             resetButton.clicked += OnResetButtonClicked;
@@ -349,6 +354,12 @@ namespace Live2D.Cubism.Editor.Inspectors
 
             var xySlider = new CubismParameterXYSlider(horizontal, vertical);
 
+            // Ensure the visual state matches the current parameter values
+            xySlider.Value = new Vector2(horizontalParam.Value, verticalParam.Value);
+
+            // Store the parameter association
+            _xySliderParameters.Add((xySlider, horizontalParam, verticalParam));
+
             // Configure labels with parameter behavior
             var labels = xySlider.Query<Label>().ToList();
             ConfigureParameterLabel(labels[0], horizontalParam);
@@ -372,6 +383,11 @@ namespace Live2D.Cubism.Editor.Inspectors
 
         private void OnResetButtonClicked()
         {
+            if (Parameters == null)
+            {
+                return;
+            }
+
             foreach (var parameter in Parameters)
             {
                 parameter.Value = parameter.DefaultValue;
@@ -388,10 +404,25 @@ namespace Live2D.Cubism.Editor.Inspectors
 
         private void UpdateSliderValues()
         {
-            var sliders = _parametersContainer.Query<Slider>().ToList();
-            for (var i = 0; i < Parameters.Length; i++)
+            if (Parameters == null)
             {
-                sliders[i].value = Parameters[i].DefaultValue;
+                return;
+            }
+
+            // Update regular sliders
+            var sliders = _parametersContainer.Query<Slider>().ToList();
+            for (var i = 0; i < sliders.Count; i++)
+            {
+                if (i < Parameters.Length)
+                {
+                    sliders[i].value = Parameters[i].Value;
+                }
+            }
+
+            // Update XY sliders using stored associations
+            foreach (var (slider, horizontalParam, verticalParam) in _xySliderParameters)
+            {
+                slider.Value = new Vector2(horizontalParam.Value, verticalParam.Value);
             }
         }
 
