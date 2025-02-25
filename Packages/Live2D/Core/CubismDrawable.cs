@@ -9,6 +9,7 @@
 using Live2D.Cubism.Core.Unmanaged;
 using Live2D.Cubism.Framework;
 using UnityEngine;
+using UnityEngine.Events;
 
 
 namespace Live2D.Cubism.Core
@@ -141,6 +142,12 @@ namespace Live2D.Cubism.Core
             }
         }
 
+        /// <summary>
+        /// Event triggered when vertex positions are updated.
+        /// </summary>
+        [SerializeField]
+        public UnityEvent<CubismDrawable> VertexPositionsDidChange = new UnityEvent<CubismDrawable>();
+
         #endregion
 
         #region Internal Methods and Structs
@@ -154,9 +161,20 @@ namespace Live2D.Cubism.Core
             private set => _unmanagedIndex = value;
         }
 
+        private bool _wasVertexPositionsDirtyThisFrame;
+
+        private void LateUpdate()
+        {
+            if (!_wasVertexPositionsDirtyThisFrame) return;
+
+            _wasVertexPositionsDirtyThisFrame = false;
+            VertexPositionsDidChange.Invoke(this);
+        }
+
         internal void SetVertexPositionsDirty()
         {
             _isVertexPositionsDirty = true;
+            _wasVertexPositionsDirtyThisFrame = true;
         }
 
         /// <summary>
