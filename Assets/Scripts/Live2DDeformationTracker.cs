@@ -1,6 +1,7 @@
 using UnityEngine;
 using Live2D.Cubism.Core;
 using System.Runtime.CompilerServices;
+using System;
 [assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 
 /// <summary>
@@ -17,10 +18,18 @@ public class Live2DDeformationTracker : MonoBehaviour
     }
 
     [System.Serializable]
-    internal struct BarycentricData
+    internal unsafe struct BarycentricData
     {
-        public int[] vertexIndices; // The three vertices forming the triangle
+        public fixed int vertexIndices[3]; // The three vertices forming the triangle
         public Vector3 weights; // Barycentric coordinates
+
+        public BarycentricData(Vector3 weights, int v1, int v2, int v3)
+        {
+            this.weights = weights;
+            this.vertexIndices[0] = v1;
+            this.vertexIndices[1] = v2;
+            this.vertexIndices[2] = v3;
+        }
     }
 
     #endregion
@@ -98,25 +107,30 @@ public class Live2DDeformationTracker : MonoBehaviour
     {
         if (targetDrawable == null) return;
 
-        var currentVertices = targetDrawable.VertexPositions;
+        var currentVertices = targetDrawable.VertexPositions.AsSpan();
 
         for (int i = 0; i < trackedPoints.Length; i++)
         {
-            var point = trackedPoints[i];
-            if (point.trackingData.vertexIndices == null) continue;
-
-            var indices = point.trackingData.vertexIndices;
-            var weights = point.trackingData.weights;
-
-            // Calculate new position using barycentric coordinates
-            Vector3 newPosition = Vector3.zero;
-            for (int j = 0; j < 3; j++)
-            {
-                newPosition += currentVertices[indices[j]] * weights[j];
-            }
-
-            _currentPositions[i] = newPosition;
+            _currentPositions[i] = CalculateWeightedPosition(i, currentVertices);
         }
+    }
+
+    internal Vector3 CalculateWeightedPosition(int pointIndex)
+        => CalculateWeightedPosition(pointIndex, targetDrawable.VertexPositions);
+
+    private unsafe Vector3 CalculateWeightedPosition(int pointIndex, Span<Vector3> vertices)
+    {
+        Vector3 position = Vector3.zero;
+        var point = trackedPoints[pointIndex];
+        var indices = point.trackingData.vertexIndices;
+        var weights = point.trackingData.weights;
+
+        for (int j = 0; j < 3; j++)
+        {
+            position += vertices[indices[j]] * weights[j];
+        }
+
+        return position;
     }
 
     public Vector3 GetCurrentPosition(int index)

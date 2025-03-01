@@ -29,14 +29,11 @@ public sealed partial class Live2DDeformationTrackerEditor
     private void DrawAndHandlePoints(SceneView sceneView)
     {
         var tracker = Tracker;
-        var vertices = tracker.targetDrawable.VertexPositions;
-
         using (new Handles.DrawingScope(tracker.transform.localToWorldMatrix))
         {
             for (int i = 0; i < tracker.trackedPoints.Length; i++)
             {
-                var point = tracker.trackedPoints[i];
-                var position = CalculatePointPosition(tracker, point, i, vertices);
+                var position = CalculatePointPosition(tracker, i);
 
                 if (_isEditing)
                 {
@@ -348,26 +345,12 @@ public sealed partial class Live2DDeformationTrackerEditor
         return ray.origin;
     }
 
-    private Vector3 CalculatePointPosition(Live2DDeformationTracker tracker, Live2DDeformationTracker.TrackedPoint point, int index, Vector3[] vertices)
+    private Vector3 CalculatePointPosition(Live2DDeformationTracker tracker, int index)
     {
         if (Application.isPlaying)
             return tracker.GetCurrentPosition(index);
 
-        return CalculateWeightedPosition(point, vertices);
-    }
-
-    private Vector3 CalculateWeightedPosition(Live2DDeformationTracker.TrackedPoint point, Vector3[] vertices)
-    {
-        Vector3 position = Vector3.zero;
-        var indices = point.trackingData.vertexIndices;
-        var weights = point.trackingData.weights;
-
-        for (int j = 0; j < 3; j++)
-        {
-            position += vertices[indices[j]] * weights[j];
-        }
-
-        return position;
+        return tracker.CalculateWeightedPosition(index);
     }
 
     private void UpdatePointPosition(int index, Vector3 localPosition)
@@ -407,11 +390,7 @@ public sealed partial class Live2DDeformationTrackerEditor
 
             if (isInside)
             {
-                return new Live2DDeformationTracker.BarycentricData
-                {
-                    vertexIndices = new int[] { i1, i2, i3 },
-                    weights = barycentricCoords
-                };
+                return new Live2DDeformationTracker.BarycentricData(barycentricCoords, i1, i2, i3);
             }
 
             var testPoint = vertices[i1] * barycentricCoords.x +
@@ -422,11 +401,7 @@ public sealed partial class Live2DDeformationTrackerEditor
             if (distance < minDistance)
             {
                 minDistance = distance;
-                bestData = new Live2DDeformationTracker.BarycentricData
-                {
-                    vertexIndices = new int[] { i1, i2, i3 },
-                    weights = barycentricCoords
-                };
+                bestData = new Live2DDeformationTracker.BarycentricData(barycentricCoords, i1, i2, i3);
             }
         }
 
