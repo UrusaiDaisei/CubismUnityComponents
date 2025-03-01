@@ -1,3 +1,4 @@
+using System;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEditorInternal;
@@ -93,8 +94,49 @@ public sealed partial class Live2DDeformationTrackerEditor : Editor
         SetupSceneViewForEditing();
         DrawAndHandlePoints(SceneView.currentDrawingSceneView);
 
-        if (_isEditing && Event.current.type == EventType.MouseMove)
+        if (!_isEditing)
+            return;
+
+        // New point creation logic
+        if (Event.current.type == EventType.MouseDown && Event.current.button == (int)MouseButton.LeftMouse && Event.current.control)
+        {
+            CreatePointAtMousePosition();
+            Event.current.Use(); // Consume the event
+        }
+
+        if (Event.current.type == EventType.MouseMove)
             SceneView.currentDrawingSceneView.Repaint();
+    }
+
+    private void CreatePointAtMousePosition()
+    {
+        Vector3 mousePosition = Event.current.mousePosition;
+        Ray ray = HandleUtility.GUIPointToWorldRay(mousePosition);
+        Plane plane = new Plane(Tracker.transform.forward, Tracker.transform.position);
+
+        if (plane.Raycast(ray, out float distance))
+        {
+            Vector3 newPointPosition = ray.GetPoint(distance);
+            AddNewTrackedPoint(newPointPosition);
+        }
+    }
+
+    private void AddNewTrackedPoint(Vector3 position)
+    {
+        Undo.RecordObject(Tracker, "Create Track Point");
+
+        // Create a new tracked point and calculate barycentric data using the existing method
+        var newTrackedPoint = new Live2DDeformationTracker.TrackedPoint
+        {
+            trackingData = CalculateBarycentricData(position, Tracker.targetDrawable)
+        };
+
+        // Add the new point to the tracked points array
+        Array.Resize(ref Tracker.trackedPoints, Tracker.trackedPoints.Length + 1);
+        Tracker.trackedPoints[Tracker.trackedPoints.Length - 1] = newTrackedPoint;
+
+        // Mark the tracker as dirty to save changes
+        EditorUtility.SetDirty(Tracker);
     }
 
     #endregion
