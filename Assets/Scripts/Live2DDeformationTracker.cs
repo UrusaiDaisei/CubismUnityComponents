@@ -18,17 +18,19 @@ public class Live2DDeformationTracker : MonoBehaviour
     }
 
     [System.Serializable]
-    internal unsafe struct BarycentricData
+    internal struct BarycentricData
     {
-        public fixed int vertexIndices[3]; // The three vertices forming the triangle
-        public Vector3 weights; // Barycentric coordinates
+        public int vertex1Index; // First vertex of the triangle
+        public int vertex2Index; // Second vertex of the triangle
+        public int vertex3Index; // Third vertex of the triangle
+        public Vector3 weights;  // Barycentric coordinates
 
         public BarycentricData(Vector3 weights, int v1, int v2, int v3)
         {
             this.weights = weights;
-            this.vertexIndices[0] = v1;
-            this.vertexIndices[1] = v2;
-            this.vertexIndices[2] = v3;
+            this.vertex1Index = v1;
+            this.vertex2Index = v2;
+            this.vertex3Index = v3;
         }
     }
 
@@ -118,17 +120,16 @@ public class Live2DDeformationTracker : MonoBehaviour
     internal Vector3 CalculateWeightedPosition(int pointIndex)
         => CalculateWeightedPosition(pointIndex, targetDrawable.VertexPositions);
 
-    private unsafe Vector3 CalculateWeightedPosition(int pointIndex, Span<Vector3> vertices)
+    private Vector3 CalculateWeightedPosition(int pointIndex, Span<Vector3> vertices)
     {
         Vector3 position = Vector3.zero;
         var point = trackedPoints[pointIndex];
-        var indices = point.trackingData.vertexIndices;
-        var weights = point.trackingData.weights;
+        var data = point.trackingData;
+        var weights = data.weights;
 
-        for (int j = 0; j < 3; j++)
-        {
-            position += vertices[indices[j]] * weights[j];
-        }
+        position += vertices[data.vertex1Index] * weights.x;
+        position += vertices[data.vertex2Index] * weights.y;
+        position += vertices[data.vertex3Index] * weights.z;
 
         return position;
     }

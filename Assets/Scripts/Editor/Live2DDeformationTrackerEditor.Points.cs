@@ -1,3 +1,4 @@
+using System;
 using Live2D.Cubism.Core;
 using UnityEditor;
 using UnityEngine;
@@ -17,6 +18,7 @@ public sealed partial class Live2DDeformationTrackerEditor
     private static readonly Color k_HandleColorNormal = new Color(1f, 0.92f, 0.016f);
     private static readonly Color k_HandleColorEdit = new Color(0.2f, 0.9f, 0.2f);
     private static readonly Color k_HandleColorSelected = new Color(0.2f, 0.2f, 0.9f);
+    private static readonly Color k_HandleColorDelete = new Color(1f, 0f, 0f);
 
     private static readonly Color k_GuideLineColor = new Color(1f, 1f, 1f, 0.75f);
     private static readonly Color k_GuideLineConstraintColor = new Color(1f, 0.5f, 0.5f, 1f);
@@ -54,6 +56,12 @@ public sealed partial class Live2DDeformationTrackerEditor
             case EventType.KeyDown:
                 switch (Event.current.keyCode)
                 {
+                    case KeyCode.E:
+                        _isDeleteMode = true;
+                        Event.current.Use();
+                        sceneView.Repaint();
+                        break;
+
                     case KeyCode.A:
                         if (_isDragging && !_isAxisConstraintKeyPressed)
                         {
@@ -80,6 +88,12 @@ public sealed partial class Live2DDeformationTrackerEditor
             case EventType.KeyUp:
                 switch (Event.current.keyCode)
                 {
+                    case KeyCode.E:
+                        _isDeleteMode = false;
+                        Event.current.Use();
+                        sceneView.Repaint();
+                        break;
+
                     case KeyCode.A:
                         _isAxisConstraintKeyPressed = false;
                         if (_isDragging)
@@ -101,8 +115,19 @@ public sealed partial class Live2DDeformationTrackerEditor
             case EventType.MouseDown:
                 if (HandleUtility.nearestControl == controlID && Event.current.button == 0)
                 {
-                    StartPointDrag(index, position, controlID);
-                    Event.current.Use();
+                    if (_isDeleteMode)
+                    {
+                        DeletePoint(index);
+                        Event.current.Use();
+                        sceneView.Repaint();
+                        GUIUtility.ExitGUI();
+                    }
+                    else
+                    {
+                        StartPointDrag(index, position, controlID);
+                        Event.current.Use();
+                        sceneView.Repaint();
+                    }
                 }
                 break;
 
@@ -248,6 +273,9 @@ public sealed partial class Live2DDeformationTrackerEditor
 
     private Color GetPointColor(int index)
     {
+        if (_isDeleteMode)
+            return k_HandleColorDelete;
+
         if (_selectedPointIndex == index)
             return k_HandleColorSelected;
 
@@ -426,6 +454,24 @@ public sealed partial class Live2DDeformationTrackerEditor
 
             return new Vector3(u, v, w);
         }
+    }
+
+    private void DeletePoint(int index)
+    {
+        // Record the state for undo before making any changes
+        Undo.RecordObject(Tracker, "Delete Track Point");
+
+        var points = Tracker.trackedPoints;
+
+        // Shift all elements after the deleted index one position to the left
+        if (index < points.Length - 1)
+            Array.Copy(points, index + 1, points, index, points.Length - index - 1);
+
+        // Resize the array to remove the last element
+        Array.Resize(ref points, points.Length - 1);
+        Tracker.trackedPoints = points;
+
+        EditorUtility.SetDirty(Tracker);
     }
 
     #endregion

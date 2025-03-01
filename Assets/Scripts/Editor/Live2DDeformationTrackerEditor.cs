@@ -20,6 +20,7 @@ public sealed partial class Live2DDeformationTrackerEditor : Editor
     private VisualElement _root;
     private Button _editButton;
     private bool _isEditing;
+    private bool _isDeleteMode;
     private int _selectedPointIndex = -1;
     private bool _isDragging;
     private Vector3 _dragStartPosition;
@@ -91,21 +92,26 @@ public sealed partial class Live2DDeformationTrackerEditor : Editor
         if (!IsExpanded)
             return;
 
+        var sceneView = SceneView.currentDrawingSceneView;
+
         SetupSceneViewForEditing();
-        DrawAndHandlePoints(SceneView.currentDrawingSceneView);
+        DrawAndHandlePoints(sceneView);
 
         if (!_isEditing)
             return;
 
         // New point creation logic
-        if (Event.current.type == EventType.MouseDown && Event.current.button == (int)MouseButton.LeftMouse && Event.current.control)
+        if (Event.current.type == EventType.MouseDown &&
+            Event.current.button == (int)MouseButton.LeftMouse &&
+            Event.current.control &&
+            !_isDeleteMode)
         {
             CreatePointAtMousePosition();
             Event.current.Use(); // Consume the event
         }
 
         if (Event.current.type == EventType.MouseMove)
-            SceneView.currentDrawingSceneView.Repaint();
+            sceneView.Repaint();
     }
 
     private void CreatePointAtMousePosition()
