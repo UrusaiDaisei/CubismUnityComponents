@@ -1,9 +1,6 @@
 using UnityEngine;
 using Live2D.Cubism.Core;
-using System.Runtime.CompilerServices;
 using System;
-
-[assembly: InternalsVisibleTo("Live2D.Cubism.Editor")]
 
 namespace Live2D.Cubism.Framework
 {
