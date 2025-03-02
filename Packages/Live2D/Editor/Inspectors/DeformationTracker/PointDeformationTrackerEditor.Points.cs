@@ -48,6 +48,9 @@ namespace Live2D.Cubism.Editor.Inspectors
             if (!_isEditing)
                 return;
 
+            // Handle keyboard events globally rather than per-point
+            HandleKeyboardInteraction(sceneView);
+
             // New point creation logic
             if (currentEvent.type == EventType.MouseDown &&
                 currentEvent.button == (int)MouseButton.LeftMouse &&
@@ -144,65 +147,6 @@ namespace Live2D.Cubism.Editor.Inspectors
 
             switch (Event.current.GetTypeForControl(controlID))
             {
-                case EventType.KeyDown:
-                    switch (Event.current.keyCode)
-                    {
-                        case KeyCode.E:
-                            _isDeleteMode = true;
-                            Event.current.Use();
-                            sceneView.Repaint();
-                            break;
-
-                        case KeyCode.A:
-                            if (_isDragging && !_isAxisConstraintKeyPressed)
-                            {
-                                _isAxisConstrained = true;
-                                _constraintOrigin = _draggingPoint;
-                            }
-                            _isAxisConstraintKeyPressed = true;
-                            Event.current.Use();
-                            sceneView.Repaint();
-                            break;
-
-                        case KeyCode.G:
-                            _isGuidelineKeyPressed = true;
-                            if (_isDragging)
-                            {
-                                _constraintOrigin = _draggingPoint;
-                            }
-                            Event.current.Use();
-                            sceneView.Repaint();
-                            break;
-                    }
-                    break;
-
-                case EventType.KeyUp:
-                    switch (Event.current.keyCode)
-                    {
-                        case KeyCode.E:
-                            _isDeleteMode = false;
-                            Event.current.Use();
-                            sceneView.Repaint();
-                            break;
-
-                        case KeyCode.A:
-                            _isAxisConstraintKeyPressed = false;
-                            if (_isDragging)
-                            {
-                                _isAxisConstrained = false;
-                            }
-                            Event.current.Use();
-                            sceneView.Repaint();
-                            break;
-
-                        case KeyCode.G:
-                            _isGuidelineKeyPressed = false;
-                            Event.current.Use();
-                            sceneView.Repaint();
-                            break;
-                    }
-                    break;
-
                 case EventType.MouseDown:
                     if (HandleUtility.nearestControl == controlID && Event.current.button == 0)
                     {
@@ -275,6 +219,58 @@ namespace Live2D.Cubism.Editor.Inspectors
             }
 
             return position;
+        }
+
+        private void HandleKeyboardInteraction(SceneView sceneView)
+        {
+            var currentEvent = Event.current;
+
+            // Early exit if not a keyboard event
+            if (currentEvent.type != EventType.KeyDown && currentEvent.type != EventType.KeyUp)
+                return;
+
+            bool isKeyDown = currentEvent.type == EventType.KeyDown;
+            void UseEventAndRepaint()
+            {
+                currentEvent.Use();
+                sceneView.Repaint();
+            }
+
+            // Handle keyboard events by key
+            switch (currentEvent.keyCode)
+            {
+                case KeyCode.E: // Delete mode toggle
+                    _isDeleteMode = isKeyDown;
+                    UseEventAndRepaint();
+                    break;
+
+                case KeyCode.A: // Axis constraint
+                    if (isKeyDown && _isDragging && !_isAxisConstraintKeyPressed)
+                    {
+                        _isAxisConstrained = true;
+                        _constraintOrigin = _draggingPoint;
+                        _isAxisConstraintKeyPressed = true;
+                    }
+                    else if (!isKeyDown)
+                    {
+                        _isAxisConstraintKeyPressed = false;
+                        if (_isDragging)
+                        {
+                            _isAxisConstrained = false;
+                        }
+                    }
+                    UseEventAndRepaint();
+                    break;
+
+                case KeyCode.G: // Guidelines
+                    _isGuidelineKeyPressed = isKeyDown;
+                    if (isKeyDown && _isDragging)
+                    {
+                        _constraintOrigin = _draggingPoint;
+                    }
+                    UseEventAndRepaint();
+                    break;
+            }
         }
 
         private void StartPointDrag(int index, Vector3 position, int controlID)
