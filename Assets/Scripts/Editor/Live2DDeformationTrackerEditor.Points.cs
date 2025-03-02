@@ -1,5 +1,4 @@
 using System;
-using Live2D.Cubism.Core;
 using UnityEditor;
 using UnityEngine;
 
@@ -13,12 +12,16 @@ public sealed partial class Live2DDeformationTrackerEditor
 
     private const float SMALL_POINT_SIZE_MULTIPLIER = 0.25f;
     private const float CROSS_SIZE_MULTIPLIER = 0.35f;
-    private const float LABEL_POSITION_OFFSET_MULTIPLIER = 1.2f;
+    private const float LABEL_POSITION_OFFSET_MULTIPLIER = 0.8f;
+
+    private const float RADIUS_MINIMUM_SIZE = 0.0001f;
 
     private static readonly Color k_HandleColorNormal = new Color(1f, 0.92f, 0.016f);
     private static readonly Color k_HandleColorEdit = new Color(0.2f, 0.9f, 0.2f);
     private static readonly Color k_HandleColorSelected = new Color(0.2f, 0.2f, 0.9f);
     private static readonly Color k_HandleColorDelete = new Color(1f, 0f, 0f);
+    private static readonly Color k_RadiusColor = new Color(0.4f, 0.7f, 1.0f, 0.3f);
+    private static readonly Color k_VertexReferenceColor = new Color(0.2f, 0.6f, 1.0f, 0.8f);
 
     private static readonly Color k_GuideLineColor = new Color(1f, 1f, 1f, 0.75f);
     private static readonly Color k_GuideLineConstraintColor = new Color(1f, 0.5f, 0.5f, 1f);
@@ -157,6 +160,30 @@ public sealed partial class Live2DDeformationTrackerEditor
             case EventType.Repaint:
                 UpdatePointSelection(index, controlID);
                 break;
+
+            case EventType.ScrollWheel:
+                if (Event.current.control)
+                {
+                    // Get distance from mouse to control to check if we're over it
+                    Vector2 screenPos = HandleUtility.WorldToGUIPoint(position);
+                    float distance = Vector2.Distance(screenPos, Event.current.mousePosition);
+
+                    // Only adjust radius if mouse is close enough to the point
+                    if (distance < 20f)
+                    {
+                        // Store the delta before consuming the event
+                        float scrollDelta = Event.current.delta.y;
+
+                        // Consume the event to prevent camera zoom
+                        Event.current.Use();
+
+                        // Adjust the point radius
+                        AdjustPointRadius(index, scrollDelta, sceneView);
+
+                        return position;
+                    }
+                }
+                break;
         }
 
         return position;
@@ -218,12 +245,26 @@ public sealed partial class Live2DDeformationTrackerEditor
     private void FinalizeDrag(int index)
     {
         Undo.RecordObject(Tracker, "Move Tracked Point");
-        Vector3 localPoint = Tracker.transform.InverseTransformPoint(_draggingPoint);
-        UpdatePointPosition(index, localPoint);
+
+        var point = Tracker.trackedPoints[index];
+        var newPosition = Tracker.transform.InverseTransformPoint(_draggingPoint);
+
+        // Update vertex references based on new position
+        Vector2 point2D = new Vector2(newPosition.x, newPosition.y);
+
+        point.vertexReferences = FindVerticesInRadius(
+            point2D,
+            point.radius,
+            Tracker.includedDrawables
+        );
+
+        Tracker.trackedPoints[index] = point;
 
         _isDragging = false;
         _isAxisConstrained = false;
         GUIUtility.hotControl = 0;
+
+        EditorUtility.SetDirty(Tracker);
         SceneView.RepaintAll();
     }
 
@@ -241,19 +282,37 @@ public sealed partial class Live2DDeformationTrackerEditor
 
     private void DrawPointVisuals(Vector3 position, int index, SceneView sceneView, bool isEditing, bool isTrackerEnabled)
     {
+        var tracker = Tracker;
+        var point = tracker.trackedPoints[index];
+
         if (_isDragging && _selectedPointIndex == index)
         {
             position = _draggingPoint;
 
             if (_isAxisConstrained || _isGuidelineKeyPressed)
             {
-                var point = _isGuidelineKeyPressed && !_isAxisConstrained
+                var constraintPoint = _isGuidelineKeyPressed && !_isAxisConstrained
                     ? _draggingPoint
                     : _constraintOrigin;
-                DrawAxisGuidelines(point, sceneView);
+                DrawAxisGuidelines(constraintPoint, sceneView);
             }
         }
 
+        // Draw vertex connections first (drawn behind other elements)
+        if (_showVertexConnections && (isEditing || isTrackerEnabled))
+        {
+            DrawVertexConnections(position, point);
+        }
+
+        // Always draw radius circles when editing, regardless of toggle state
+        if (isEditing)
+        {
+            // Draw radius circle
+            Handles.color = k_RadiusColor;
+            Handles.DrawWireDisc(position, Vector3.forward, point.radius, 2f);
+        }
+
+        // Draw the main handle - this should always be drawn last to ensure visibility
         Handles.color = GetPointColor(index);
 
         if (!isTrackerEnabled && !isEditing)
@@ -269,6 +328,37 @@ public sealed partial class Live2DDeformationTrackerEditor
         {
             DrawIndexLabel(position, index);
         }
+    }
+
+    private void DrawVertexConnections(Vector3 position, Live2DDeformationTracker.TrackedPoint point)
+    {
+        const float VERTEX_WEIGHT_MULTIPLIER = 1.6f;
+        const float VERTEX_ALPHA_MULTIPLIER = 0.7f;
+        const float VERTEX_LINE_WIDTH = 1.5f;
+        const float VERTEX_POINT_SIZE_MULTIPLIER = 0.5f;
+
+        var originalColor = Handles.color;
+
+        // Draw lines to each referenced vertex
+        for (int i = 0; i < point.vertexReferences.Length; i++)
+        {
+            var vertexRef = point.vertexReferences[i];
+            var drawable = Tracker.includedDrawables[vertexRef.drawableIndex];
+            var vertex = drawable.VertexPositions[vertexRef.vertexIndex];
+
+            // Color based on weight - more influence = more opacity but reduced to improve handle visibility
+            float alpha = Mathf.Clamp01(vertexRef.weight * VERTEX_WEIGHT_MULTIPLIER) * VERTEX_ALPHA_MULTIPLIER;
+            Handles.color = new Color(k_VertexReferenceColor.r, k_VertexReferenceColor.g,
+                                     k_VertexReferenceColor.b, alpha);
+
+            // Draw connection line
+            Handles.DrawLine(position, vertex, VERTEX_LINE_WIDTH);
+
+            // Draw small point at vertex position
+            Handles.DrawSolidDisc(vertex, Vector3.forward, HANDLE_SIZE * VERTEX_POINT_SIZE_MULTIPLIER * alpha);
+        }
+
+        Handles.color = originalColor;
     }
 
     private Color GetPointColor(int index)
@@ -290,7 +380,9 @@ public sealed partial class Live2DDeformationTrackerEditor
 
     private void DrawFullHandle(Vector3 position)
     {
-        Handles.DrawWireArc(position, Vector3.forward, Vector3.right, 360f, HANDLE_SIZE * 0.5f, HANDLE_LINE_WIDTH);
+        // Then draw the wire circle on top
+        Handles.DrawWireArc(position, Vector3.forward, Vector3.right, 360f,
+                           HANDLE_SIZE * 0.5f, HANDLE_LINE_WIDTH);
 
         float crossSize = HANDLE_SIZE * CROSS_SIZE_MULTIPLIER;
         Handles.DrawLine(
@@ -308,7 +400,7 @@ public sealed partial class Live2DDeformationTrackerEditor
     private void DrawIndexLabel(Vector3 position, int index)
     {
         Vector3 labelPosition = position + Vector3.up * HANDLE_SIZE * LABEL_POSITION_OFFSET_MULTIPLIER;
-        Handles.Label(labelPosition, index.ToString(), k_LabelStyle);
+        Handles.Label(labelPosition, index.ToString(), LabelStyle);
     }
 
     private void DrawAxisGuidelines(Vector3 origin, SceneView view)
@@ -375,85 +467,24 @@ public sealed partial class Live2DDeformationTrackerEditor
 
     private Vector3 CalculatePointPosition(Live2DDeformationTracker tracker, int index)
     {
+        // In play mode, use the runtime position
         if (Application.isPlaying)
             return tracker.GetCurrentPosition(index);
 
-        return tracker.CalculateWeightedPosition(index);
-    }
+        // If dragging this point, return drag position
+        if (_isDragging && _selectedPointIndex == index)
+            return _draggingPoint;
 
-    private void UpdatePointPosition(int index, Vector3 localPosition)
-    {
-        if (index < 0 || index >= Tracker.trackedPoints.Length)
-            return;
-
-        Vector2 point2D = new Vector2(localPosition.x, localPosition.y);
-        var newData = CalculateBarycentricData(point2D, Tracker.targetDrawable);
-
-        var points = Tracker.trackedPoints;
-        points[index].trackingData = newData;
-
-        EditorUtility.SetDirty(Tracker);
-    }
-
-    private static Live2DDeformationTracker.BarycentricData CalculateBarycentricData(Vector2 point, CubismDrawable targetDrawable)
-    {
-        float minDistance = float.MaxValue;
-        Live2DDeformationTracker.BarycentricData bestData = default;
-
-        var vertices = targetDrawable.VertexPositions;
-        var indices = targetDrawable.Indices;
-
-        for (int i = 0; i < indices.Length; i += 3)
+        // Otherwise calculate from vertex references
+        if (index >= 0 && index < tracker.trackedPoints.Length)
         {
-            int i1 = indices[i];
-            int i2 = indices[i + 1];
-            int i3 = indices[i + 2];
-
-            var barycentricCoords = CalculateBarycentricCoordinates(
-                point, vertices[i1], vertices[i2], vertices[i3]);
-
-            bool isInside = barycentricCoords.x >= 0 && barycentricCoords.y >= 0 &&
-                           barycentricCoords.z >= 0 &&
-                           (barycentricCoords.x + barycentricCoords.y + barycentricCoords.z <= 1.001f);
-
-            if (isInside)
-            {
-                return new Live2DDeformationTracker.BarycentricData(barycentricCoords, i1, i2, i3);
-            }
-
-            var testPoint = vertices[i1] * barycentricCoords.x +
-                           vertices[i2] * barycentricCoords.y +
-                           vertices[i3] * barycentricCoords.z;
-            float distance = Vector3.Distance(point, testPoint);
-
-            if (distance < minDistance)
-            {
-                minDistance = distance;
-                bestData = new Live2DDeformationTracker.BarycentricData(barycentricCoords, i1, i2, i3);
-            }
+            var point = tracker.trackedPoints[index];
+            if (point.vertexReferences != null && point.vertexReferences.Length > 0)
+                return tracker.CalculatePointPosition(index);
         }
 
-        return bestData;
-
-        static Vector3 CalculateBarycentricCoordinates(Vector2 point, Vector3 a, Vector3 b, Vector3 c)
-        {
-            Vector3 v0 = b - a;
-            Vector3 v1 = c - a;
-            Vector3 v2 = (Vector3)point - a;
-
-            float d00 = Vector3.Dot(v0, v0);
-            float d01 = Vector3.Dot(v0, v1);
-            float d11 = Vector3.Dot(v1, v1);
-            float d20 = Vector3.Dot(v2, v0);
-            float d21 = Vector3.Dot(v2, v1);
-
-            float denom = d00 * d11 - d01 * d01;
-            float v = (d11 * d20 - d01 * d21) / denom;
-            float w = (d00 * d21 - d01 * d20) / denom;
-            float u = 1.0f - v - w;
-
-            return new Vector3(u, v, w);
-        }
+        // Fallback for points with no references
+        return Vector3.zero;
     }
 
     private void DeletePoint(int index)
@@ -463,15 +494,58 @@ public sealed partial class Live2DDeformationTrackerEditor
 
         var points = Tracker.trackedPoints;
 
-        // Shift all elements after the deleted index one position to the left
-        if (index < points.Length - 1)
-            Array.Copy(points, index + 1, points, index, points.Length - index - 1);
+        // Check if the index is valid
+        if (index < 0 || index >= points.Length)
+            return;
 
-        // Resize the array to remove the last element
-        Array.Resize(ref points, points.Length - 1);
-        Tracker.trackedPoints = points;
+        // Create a new array with one less element
+        var newPoints = new Live2DDeformationTracker.TrackedPoint[points.Length - 1];
+
+        // Copy elements before the index
+        if (index > 0)
+            Array.Copy(points, 0, newPoints, 0, index);
+
+        // Copy elements after the index
+        if (index < points.Length - 1)
+            Array.Copy(points, index + 1, newPoints, index, points.Length - index - 1);
+
+        Tracker.trackedPoints = newPoints;
+
+        // Reset selection
+        _selectedPointIndex = -1;
 
         EditorUtility.SetDirty(Tracker);
+        SceneView.RepaintAll();
+    }
+
+    private void AdjustPointRadius(int index, float delta, SceneView sceneView)
+    {
+        var tracker = Tracker;
+        var point = tracker.trackedPoints[index];
+
+        // Calculate current position
+        Vector3 position = CalculatePointPosition(tracker, index);
+        Vector2 point2D = new Vector2(position.x, position.y);
+
+        // Adjust radius with mouse wheel (negative to make scrolling down reduce radius)
+        // Reduced scale factor for more subtle adjustments
+        float newRadius = Mathf.Max(point.radius - delta * 0.002f, RADIUS_MINIMUM_SIZE); // Smaller scale factor for finer control
+
+        Undo.RecordObject(tracker, "Change Point Radius");
+
+        point.radius = newRadius;
+
+        // Update vertex references based on new radius
+        point.vertexReferences = FindVerticesInRadius(
+            point2D,
+            point.radius,
+            tracker.includedDrawables
+        );
+
+        tracker.trackedPoints[index] = point;
+        EditorUtility.SetDirty(tracker);
+
+        sceneView.Repaint();
     }
 
     #endregion

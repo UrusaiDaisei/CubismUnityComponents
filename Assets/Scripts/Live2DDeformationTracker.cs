@@ -2,47 +2,38 @@ using UnityEngine;
 using Live2D.Cubism.Core;
 using System.Runtime.CompilerServices;
 using System;
+
 [assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 
 /// <summary>
-/// Tracks deformations in a Live2D model by using barycentric coordinates of specific points.
+/// Tracks deformations in a Live2D model by using direct vertex references.
 /// </summary>
-public class Live2DDeformationTracker : MonoBehaviour
+public sealed class Live2DDeformationTracker : MonoBehaviour
 {
     #region Data Structures
 
-    [System.Serializable]
-    internal struct TrackedPoint
+    [Serializable]
+    internal struct VertexReference
     {
-        [HideInInspector] public BarycentricData trackingData;
+        public int drawableIndex;          // Index into includedDrawables list
+        public int vertexIndex;            // Index of vertex within the drawable
+        public float weight;               // Influence weight for this vertex
     }
 
-    [System.Serializable]
-    internal struct BarycentricData
+    [Serializable]
+    internal struct TrackedPoint
     {
-        public int vertex1Index; // First vertex of the triangle
-        public int vertex2Index; // Second vertex of the triangle
-        public int vertex3Index; // Third vertex of the triangle
-        public Vector3 weights;  // Barycentric coordinates
-
-        public BarycentricData(Vector3 weights, int v1, int v2, int v3)
-        {
-            this.weights = weights;
-            this.vertex1Index = v1;
-            this.vertex2Index = v2;
-            this.vertex3Index = v3;
-        }
+        public VertexReference[] vertexReferences;  // Array of vertex references
+        public float radius;                        // Influence radius for this point
     }
 
     #endregion
 
     #region Fields
 
-    [Header("Target Settings")]
-    [Tooltip("The drawable to track")]
-    public CubismDrawable targetDrawable;
+    [SerializeField]
+    internal CubismDrawable[] includedDrawables = new CubismDrawable[0];
 
-    [Header("Tracked Points")]
     [SerializeField]
     internal TrackedPoint[] trackedPoints = { };
 
@@ -51,54 +42,53 @@ public class Live2DDeformationTracker : MonoBehaviour
     #region Internal State
 
     private CubismModel _model;
+    internal CubismModel Model
+    {
+        get
+        {
+            if (_model == null)
+            {
+                _model = GetComponentInParent<CubismModel>();
+                if (_model == null)
+                    throw new Exception("Could not find CubismModel in this object or its parents!");
+            }
+            return _model;
+        }
+    }
     private Vector3[] _currentPositions;
 
     #endregion
 
     #region Unity Methods
 
-    private void Start()
+    private void Awake()
     {
-        Initialize();
+        // Initialize positions array
+        _currentPositions = new Vector3[trackedPoints.Length];
+    }
+
+    private void OnEnable()
+    {
+        UpdateTrackedPoints();
+
+        // Subscribe to each drawable's update event
+        foreach (var drawable in includedDrawables)
+        {
+            drawable.VertexPositionsDidChange.AddListener(OnVertexPositionsChanged);
+        }
+    }
+
+    private void OnDisable()
+    {
+        foreach (var drawable in includedDrawables)
+        {
+            drawable.VertexPositionsDidChange.RemoveListener(OnVertexPositionsChanged);
+        }
     }
 
     #endregion
 
-
-
     #region Private Methods
-
-    private void Initialize()
-    {
-        // Find model in this object or parents
-        _model = GetComponentInParent<CubismModel>();
-
-        if (_model == null)
-        {
-            Debug.LogError("Could not find CubismModel in this object or its parents!");
-            return;
-        }
-
-        if (targetDrawable == null)
-        {
-            Debug.LogError("No target drawable assigned!");
-            return;
-        }
-
-        // Initialize positions array
-        _currentPositions = new Vector3[trackedPoints.Length];
-
-        // Subscribe to drawable updates
-        targetDrawable.VertexPositionsDidChange.AddListener(OnVertexPositionsChanged);
-    }
-
-    private void OnDestroy()
-    {
-        if (targetDrawable != null)
-        {
-            targetDrawable.VertexPositionsDidChange.RemoveListener(OnVertexPositionsChanged);
-        }
-    }
 
     private void OnVertexPositionsChanged(CubismDrawable drawable)
     {
@@ -107,33 +97,37 @@ public class Live2DDeformationTracker : MonoBehaviour
 
     private void UpdateTrackedPoints()
     {
-        if (targetDrawable == null) return;
-
-        var currentVertices = targetDrawable.VertexPositions.AsSpan();
-
         for (int i = 0; i < trackedPoints.Length; i++)
         {
-            _currentPositions[i] = CalculateWeightedPosition(i, currentVertices);
+            _currentPositions[i] = CalculatePointPosition(i);
         }
     }
 
-    internal Vector3 CalculateWeightedPosition(int pointIndex)
-        => CalculateWeightedPosition(pointIndex, targetDrawable.VertexPositions);
-
-    private Vector3 CalculateWeightedPosition(int pointIndex, Span<Vector3> vertices)
+    internal Vector3 CalculatePointPosition(int pointIndex)
     {
-        Vector3 position = Vector3.zero;
         var point = trackedPoints[pointIndex];
-        var data = point.trackingData;
-        var weights = data.weights;
 
-        position += vertices[data.vertex1Index] * weights.x;
-        position += vertices[data.vertex2Index] * weights.y;
-        position += vertices[data.vertex3Index] * weights.z;
+        // Calculate from vertex references
+        Vector3 result = Vector3.zero;
+        float totalWeight = 0;
 
-        return position;
+        for (int i = 0; i < point.vertexReferences.Length; i++)
+        {
+            var vertexRef = point.vertexReferences[i];
+            var drawable = includedDrawables[vertexRef.drawableIndex];
+            var position = drawable.VertexPositions[vertexRef.vertexIndex];
+
+            result += position * vertexRef.weight;
+            totalWeight += vertexRef.weight;
+        }
+
+        // Return the weighted average or zero if no valid references
+        return totalWeight > 0 ? result / totalWeight : Vector3.zero;
     }
 
+    /// <summary>
+    /// Gets the current calculated position for a tracked point.
+    /// </summary>
     public Vector3 GetCurrentPosition(int index)
     {
         if (index < 0 || index >= _currentPositions.Length)
