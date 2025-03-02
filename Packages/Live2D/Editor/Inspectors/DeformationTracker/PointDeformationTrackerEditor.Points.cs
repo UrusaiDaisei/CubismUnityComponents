@@ -8,31 +8,11 @@ namespace Live2D.Cubism.Editor.Inspectors
 {
     public sealed partial class PointDeformationTrackerEditor
     {
-        #region UI Constants
+        #region Unity Methods
 
-        private const float HANDLE_SIZE = 0.015f;
-        private const float HANDLE_LINE_WIDTH = 4f;
-        private const float GUIDE_LINE_WIDTH = 4f;
-
-        private const float SMALL_POINT_SIZE_MULTIPLIER = 0.25f;
-        private const float CROSS_SIZE_MULTIPLIER = 0.35f;
-        private const float LABEL_POSITION_OFFSET_MULTIPLIER = 0.8f;
-
-        private const float RADIUS_MINIMUM_SIZE = 0.0001f;
-
-        private static readonly Color k_HandleColorNormal = new Color(1f, 0.92f, 0.016f);
-        private static readonly Color k_HandleColorEdit = new Color(0.2f, 0.9f, 0.2f);
-        private static readonly Color k_HandleColorSelected = new Color(0.2f, 0.2f, 0.9f);
-        private static readonly Color k_HandleColorDelete = new Color(1f, 0f, 0f);
-        private static readonly Color k_RadiusColor = new Color(0.4f, 0.7f, 1.0f, 0.3f);
-        private static readonly Color k_VertexReferenceColor = new Color(0.2f, 0.6f, 1.0f, 0.8f);
-
-        private static readonly Color k_GuideLineColor = new Color(1f, 1f, 1f, 0.75f);
-        private static readonly Color k_GuideLineConstraintColor = new Color(1f, 0.5f, 0.5f, 1f);
-        private static readonly Color k_GuideLineInactiveColor = new Color(1f, 1f, 1f, 0.5f);
-
-        #endregion
-
+        /// <summary>
+        /// Handles the scene GUI interactions for deformation tracker points.
+        /// </summary>
         private void OnSceneGUI()
         {
             if (!IsExpanded)
@@ -41,30 +21,34 @@ namespace Live2D.Cubism.Editor.Inspectors
             var sceneView = SceneView.currentDrawingSceneView;
             var currentEvent = Event.current;
 
-            // Drawing and point handling will use HandlePointInteraction for event handling
             SetupSceneViewForEditing();
             DrawAndHandlePoints(sceneView);
 
             if (!_isEditing)
                 return;
 
-            // Handle keyboard events globally rather than per-point
             HandleKeyboardInteraction(sceneView);
 
-            // New point creation logic
             if (currentEvent.type == EventType.MouseDown &&
                 currentEvent.button == (int)MouseButton.LeftMouse &&
                 currentEvent.control &&
                 !_isDeleteMode)
             {
                 CreatePointAtMousePosition();
-                currentEvent.Use(); // Consume the event
+                currentEvent.Use();
             }
 
             if (currentEvent.type == EventType.MouseMove)
                 sceneView.Repaint();
         }
 
+        #endregion
+
+        #region Scene View Logic
+
+        /// <summary>
+        /// Sets up the scene view for editing tracked points.
+        /// </summary>
         private void SetupSceneViewForEditing()
         {
             if (!_isEditing)
@@ -74,81 +58,123 @@ namespace Live2D.Cubism.Editor.Inspectors
             HandleUtility.AddDefaultControl(GUIUtility.GetControlID(FocusType.Passive));
         }
 
+        /// <summary>
+        /// Creates a new tracked point at the current mouse position.
+        /// </summary>
         private void CreatePointAtMousePosition()
         {
-            Vector3 mousePosition = Event.current.mousePosition;
-            Ray ray = HandleUtility.GUIPointToWorldRay(mousePosition);
-            Plane plane = new Plane(Tracker.transform.forward, Tracker.transform.position);
+            var mousePosition = Event.current.mousePosition;
+            var ray = HandleUtility.GUIPointToWorldRay(mousePosition);
+            var plane = new Plane(Tracker.transform.forward, Tracker.transform.position);
 
             if (plane.Raycast(ray, out float distance))
             {
-                Vector3 newPointPosition = ray.GetPoint(distance);
+                var newPointPosition = ray.GetPoint(distance);
                 AddNewTrackedPoint(newPointPosition);
             }
         }
 
+        /// <summary>
+        /// Adds a new tracked point at the specified world position.
+        /// </summary>
+        /// <param name="position">World position to add the point.</param>
         private void AddNewTrackedPoint(Vector3 position)
         {
             Undo.RecordObject(Tracker, "Create Track Point");
 
-            // Convert to local position
-            Vector3 localPosition = Tracker.transform.InverseTransformPoint(position);
-            Vector2 point2D = new Vector2(localPosition.x, localPosition.y);
+            var localPosition = Tracker.transform.InverseTransformPoint(position);
+            var point2D = new Vector2(localPosition.x, localPosition.y);
 
-            // Create new tracked point with radius value
             var newTrackedPoint = new PointDeformationTracker.TrackedPoint
             {
                 radius = DEFAULT_RADIUS
             };
 
-            // Find vertices within radius
             newTrackedPoint.vertexReferences = FindVerticesInRadius(
                 point2D,
                 DEFAULT_RADIUS,
                 Tracker.includedDrawables
             );
 
-            // Add the new point to the tracked points array
             var points = Tracker.trackedPoints;
             Array.Resize(ref points, points.Length + 1);
             int newIndex = points.Length - 1;
             points[newIndex] = newTrackedPoint;
 
             Tracker.trackedPoints = points;
-
-            // Mark the tracker as dirty to save changes
             EditorUtility.SetDirty(Tracker);
         }
 
-        #region Point Handling
-
+        /// <summary>
+        /// Draws and handles interactions with all tracked points.
+        /// </summary>
+        /// <param name="sceneView">Current scene view.</param>
         private void DrawAndHandlePoints(SceneView sceneView)
         {
             var tracker = Tracker;
             using (new Handles.DrawingScope(tracker.transform.localToWorldMatrix))
             {
+                bool anyPointHovered = false;
+
                 for (int i = 0; i < tracker.trackedPoints.Length; i++)
                 {
                     var position = CalculatePointPosition(tracker, i);
 
                     if (_isEditing)
                     {
-                        position = HandlePointInteraction(i, position, sceneView);
+                        var (newPosition, isHovering) = HandlePointInteraction(i, position, sceneView);
+                        position = newPosition;
+
+                        if (isHovering)
+                        {
+                            anyPointHovered = true;
+                        }
                     }
 
                     DrawPointVisuals(position, i, sceneView, _isEditing, tracker.enabled);
                 }
+
+                // If in editing mode and no point is hovered or being dragged, reset the selection
+                if (_isEditing && !anyPointHovered && !_isDragging && Event.current.type == EventType.Layout)
+                {
+                    _selectedPointIndex = -1;
+                }
             }
         }
 
-        private Vector3 HandlePointInteraction(int index, Vector3 position, SceneView sceneView)
+        /// <summary>
+        /// Handles user interaction with a tracked point.
+        /// </summary>
+        /// <param name="index">Index of the point being interacted with.</param>
+        /// <param name="position">Position of the point.</param>
+        /// <param name="sceneView">Current scene view.</param>
+        /// <returns>A tuple with the new position after interaction and a flag indicating if the point is being hovered.</returns>
+        private (Vector3 position, bool isHovering) HandlePointInteraction(int index, Vector3 position, SceneView sceneView)
         {
             int controlID = GUIUtility.GetControlID(FocusType.Passive);
 
-            switch (Event.current.GetTypeForControl(controlID))
+            float distanceToMouse = HandleUtility.DistanceToCircle(position, Style.HANDLE_SIZE * 0.5f);
+            float interactionThreshold = Style.HANDLE_SIZE * 1.5f;
+            bool isWithinInteractionRange = distanceToMouse <= interactionThreshold;
+
+            if (!isWithinInteractionRange && !(GUIUtility.hotControl == controlID && _isDragging) && _selectedPointIndex != index)
+            {
+                if (Event.current.type == EventType.Layout)
+                {
+                    HandleUtility.AddControl(controlID, distanceToMouse);
+                }
+                return (position, false);
+            }
+
+            if (isWithinInteractionRange && GUIUtility.hotControl == 0)
+            {
+                _selectedPointIndex = index;
+            }
+
+            switch (Event.current.type)
             {
                 case EventType.MouseDown:
-                    if (HandleUtility.nearestControl == controlID && Event.current.button == 0)
+                    if (isWithinInteractionRange && Event.current.button == 0)
                     {
                         if (_isDeleteMode)
                         {
@@ -183,49 +209,31 @@ namespace Live2D.Cubism.Editor.Inspectors
                     break;
 
                 case EventType.Layout:
-                    HandleUtility.AddControl(
-                        controlID,
-                        HandleUtility.DistanceToCircle(position, HANDLE_SIZE * 0.5f)
-                    );
-                    break;
-
-                case EventType.Repaint:
-                    UpdatePointSelection(index, controlID);
+                    HandleUtility.AddControl(controlID, distanceToMouse);
                     break;
 
                 case EventType.ScrollWheel:
-                    if (Event.current.control)
+                    if (isWithinInteractionRange && Event.current.control)
                     {
-                        // Get distance from mouse to control to check if we're over it
-                        Vector2 screenPos = HandleUtility.WorldToGUIPoint(position);
-                        float distance = Vector2.Distance(screenPos, Event.current.mousePosition);
-
-                        // Only adjust radius if mouse is close enough to the point
-                        if (distance < 20f)
-                        {
-                            // Store the delta before consuming the event
-                            float scrollDelta = Event.current.delta.y;
-
-                            // Consume the event to prevent camera zoom
-                            Event.current.Use();
-
-                            // Adjust the point radius
-                            AdjustPointRadius(index, scrollDelta, sceneView);
-
-                            return position;
-                        }
+                        float scrollDelta = Event.current.delta.y;
+                        AdjustPointRadius(index, scrollDelta);
+                        Event.current.Use();
+                        sceneView.Repaint();
                     }
                     break;
             }
 
-            return position;
+            return (position, isWithinInteractionRange || (GUIUtility.hotControl == controlID && _isDragging));
         }
 
+        /// <summary>
+        /// Handles keyboard interactions for the editor.
+        /// </summary>
+        /// <param name="sceneView">Current scene view.</param>
         private void HandleKeyboardInteraction(SceneView sceneView)
         {
             var currentEvent = Event.current;
 
-            // Early exit if not a keyboard event
             if (currentEvent.type != EventType.KeyDown && currentEvent.type != EventType.KeyUp)
                 return;
 
@@ -236,15 +244,14 @@ namespace Live2D.Cubism.Editor.Inspectors
                 sceneView.Repaint();
             }
 
-            // Handle keyboard events by key
             switch (currentEvent.keyCode)
             {
-                case KeyCode.E: // Delete mode toggle
+                case KeyCode.E:
                     _isDeleteMode = isKeyDown;
                     UseEventAndRepaint();
                     break;
 
-                case KeyCode.A: // Axis constraint
+                case KeyCode.A:
                     if (isKeyDown && _isDragging && !_isAxisConstraintKeyPressed)
                     {
                         _isAxisConstrained = true;
@@ -262,7 +269,7 @@ namespace Live2D.Cubism.Editor.Inspectors
                     UseEventAndRepaint();
                     break;
 
-                case KeyCode.G: // Guidelines
+                case KeyCode.G:
                     _isGuidelineKeyPressed = isKeyDown;
                     if (isKeyDown && _isDragging)
                     {
@@ -273,6 +280,12 @@ namespace Live2D.Cubism.Editor.Inspectors
             }
         }
 
+        /// <summary>
+        /// Starts dragging a point.
+        /// </summary>
+        /// <param name="index">Index of the point to drag.</param>
+        /// <param name="position">Initial position.</param>
+        /// <param name="controlID">Control ID for the handle.</param>
         private void StartPointDrag(int index, Vector3 position, int controlID)
         {
             _selectedPointIndex = index;
@@ -286,14 +299,20 @@ namespace Live2D.Cubism.Editor.Inspectors
             GUIUtility.hotControl = controlID;
         }
 
+        /// <summary>
+        /// Updates the position of the point being dragged.
+        /// </summary>
+        /// <param name="position">Current position.</param>
+        /// <param name="sceneView">Current scene view.</param>
+        /// <returns>The updated position.</returns>
         private Vector3 UpdateDragPosition(Vector3 position, SceneView sceneView)
         {
-            Ray ray = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
-            Plane plane = new Plane(Tracker.transform.forward, _dragStartPosition);
+            var ray = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
+            var plane = new Plane(Tracker.transform.forward, _dragStartPosition);
 
             if (plane.Raycast(ray, out float distance))
             {
-                Vector3 newPoint = ray.GetPoint(distance);
+                var newPoint = ray.GetPoint(distance);
 
                 if (_isAxisConstraintKeyPressed && !_isAxisConstrained)
                 {
@@ -326,15 +345,17 @@ namespace Live2D.Cubism.Editor.Inspectors
             return position;
         }
 
+        /// <summary>
+        /// Finalizes the dragging operation and updates the point's data.
+        /// </summary>
+        /// <param name="index">Index of the point that was dragged.</param>
         private void FinalizeDrag(int index)
         {
             Undo.RecordObject(Tracker, "Move Tracked Point");
 
             var point = Tracker.trackedPoints[index];
             var newPosition = Tracker.transform.InverseTransformPoint(_draggingPoint);
-
-            // Update vertex references based on new position
-            Vector2 point2D = new Vector2(newPosition.x, newPosition.y);
+            var point2D = new Vector2(newPosition.x, newPosition.y);
 
             point.vertexReferences = FindVerticesInRadius(
                 point2D,
@@ -352,141 +373,11 @@ namespace Live2D.Cubism.Editor.Inspectors
             SceneView.RepaintAll();
         }
 
-        private void UpdatePointSelection(int index, int controlID)
-        {
-            if (HandleUtility.nearestControl == controlID && GUIUtility.hotControl == 0)
-            {
-                _selectedPointIndex = index;
-            }
-            else if (GUIUtility.hotControl == 0 && _selectedPointIndex == index)
-            {
-                _selectedPointIndex = -1;
-            }
-        }
-
-        private void DrawPointVisuals(Vector3 position, int index, SceneView sceneView, bool isEditing, bool isTrackerEnabled)
-        {
-            var tracker = Tracker;
-            var point = tracker.trackedPoints[index];
-
-            if (_isDragging && _selectedPointIndex == index)
-            {
-                position = _draggingPoint;
-
-                if (_isAxisConstrained || _isGuidelineKeyPressed)
-                {
-                    var constraintPoint = _isGuidelineKeyPressed && !_isAxisConstrained
-                        ? _draggingPoint
-                        : _constraintOrigin;
-                    DrawAxisGuidelines(constraintPoint, sceneView);
-                }
-            }
-
-            // Draw vertex connections first (drawn behind other elements)
-            if (_showVertexConnections && (isEditing || isTrackerEnabled))
-            {
-                DrawVertexConnections(position, point);
-            }
-
-            // Always draw radius circles when editing, regardless of toggle state
-            if (isEditing)
-            {
-                // Draw radius circle
-                Handles.color = k_RadiusColor;
-                Handles.DrawWireDisc(position, Vector3.forward, point.radius, 2f);
-            }
-
-            // Draw the main handle - this should always be drawn last to ensure visibility
-            Handles.color = GetPointColor(index);
-
-            if (!isTrackerEnabled && !isEditing)
-            {
-                DrawSimplePoint(position);
-            }
-            else
-            {
-                DrawFullHandle(position);
-            }
-
-            if (Event.current.alt)
-            {
-                DrawIndexLabel(position, index);
-            }
-        }
-
-        private void DrawVertexConnections(Vector3 position, PointDeformationTracker.TrackedPoint point)
-        {
-            const float VERTEX_WEIGHT_MULTIPLIER = 1.6f;
-            const float VERTEX_ALPHA_MULTIPLIER = 0.7f;
-            const float VERTEX_LINE_WIDTH = 1.5f;
-            const float VERTEX_POINT_SIZE_MULTIPLIER = 0.5f;
-
-            var originalColor = Handles.color;
-
-            // Draw lines to each referenced vertex
-            for (int i = 0; i < point.vertexReferences.Length; i++)
-            {
-                var vertexRef = point.vertexReferences[i];
-                var drawable = Tracker.includedDrawables[vertexRef.drawableIndex];
-                var vertex = drawable.VertexPositions[vertexRef.vertexIndex];
-
-                // Color based on weight - more influence = more opacity but reduced to improve handle visibility
-                float alpha = Mathf.Clamp01(vertexRef.weight * VERTEX_WEIGHT_MULTIPLIER) * VERTEX_ALPHA_MULTIPLIER;
-                Handles.color = new Color(k_VertexReferenceColor.r, k_VertexReferenceColor.g,
-                                         k_VertexReferenceColor.b, alpha);
-
-                // Draw connection line
-                Handles.DrawLine(position, vertex, VERTEX_LINE_WIDTH);
-
-                // Draw small point at vertex position
-                Handles.DrawSolidDisc(vertex, Vector3.forward, HANDLE_SIZE * VERTEX_POINT_SIZE_MULTIPLIER * alpha);
-            }
-
-            Handles.color = originalColor;
-        }
-
-        private Color GetPointColor(int index)
-        {
-            if (_isDeleteMode)
-                return k_HandleColorDelete;
-
-            if (_selectedPointIndex == index)
-                return k_HandleColorSelected;
-
-            return _isEditing ? k_HandleColorEdit : k_HandleColorNormal;
-        }
-
-        private void DrawSimplePoint(Vector3 position)
-        {
-            float smallPointSize = HANDLE_SIZE * SMALL_POINT_SIZE_MULTIPLIER;
-            Handles.DrawSolidDisc(position, Vector3.forward, smallPointSize);
-        }
-
-        private void DrawFullHandle(Vector3 position)
-        {
-            // Then draw the wire circle on top
-            Handles.DrawWireArc(position, Vector3.forward, Vector3.right, 360f,
-                               HANDLE_SIZE * 0.5f, HANDLE_LINE_WIDTH);
-
-            float crossSize = HANDLE_SIZE * CROSS_SIZE_MULTIPLIER;
-            Handles.DrawLine(
-                position + new Vector3(-crossSize, -crossSize, 0),
-                position + new Vector3(crossSize, crossSize, 0),
-                HANDLE_LINE_WIDTH
-            );
-            Handles.DrawLine(
-                position + new Vector3(-crossSize, crossSize, 0),
-                position + new Vector3(crossSize, -crossSize, 0),
-                HANDLE_LINE_WIDTH
-            );
-        }
-
-        private void DrawIndexLabel(Vector3 position, int index)
-        {
-            Vector3 labelPosition = position + Vector3.up * HANDLE_SIZE * LABEL_POSITION_OFFSET_MULTIPLIER;
-            Handles.Label(labelPosition, index.ToString(), LabelStyle);
-        }
-
+        /// <summary>
+        /// Draws axis guidelines for constrained movement.
+        /// </summary>
+        /// <param name="origin">Origin point for the guidelines.</param>
+        /// <param name="view">Current scene view.</param>
         private void DrawAxisGuidelines(Vector3 origin, SceneView view)
         {
             var originalColor = Handles.color;
@@ -512,33 +403,186 @@ namespace Live2D.Cubism.Editor.Inspectors
 
             if (_isGuidelineKeyPressed && !_isAxisConstrained)
             {
-                Handles.color = k_GuideLineColor;
-                Handles.DrawLine(hStartWorld, hEndWorld, GUIDE_LINE_WIDTH);
-                Handles.DrawLine(vStartWorld, vEndWorld, GUIDE_LINE_WIDTH);
+                Handles.color = Style.GuideLineColor;
+                Handles.DrawLine(hStartWorld, hEndWorld, Style.GUIDE_LINE_WIDTH);
+                Handles.DrawLine(vStartWorld, vEndWorld, Style.GUIDE_LINE_WIDTH);
             }
             else
             {
                 var delta = _draggingPoint - _constraintOrigin;
                 bool isHorizontal = Mathf.Abs(delta.x) > Mathf.Abs(delta.y);
 
-                Handles.color = k_GuideLineConstraintColor;
+                Handles.color = Style.GuideLineConstraintColor;
                 if (isHorizontal)
                 {
-                    Handles.DrawLine(hStartWorld, hEndWorld, GUIDE_LINE_WIDTH);
-                    Handles.color = k_GuideLineInactiveColor;
-                    Handles.DrawLine(vStartWorld, vEndWorld, GUIDE_LINE_WIDTH);
+                    Handles.DrawLine(hStartWorld, hEndWorld, Style.GUIDE_LINE_WIDTH);
+                    Handles.color = Style.GuideLineInactiveColor;
+                    Handles.DrawLine(vStartWorld, vEndWorld, Style.GUIDE_LINE_WIDTH);
                 }
                 else
                 {
-                    Handles.DrawLine(vStartWorld, vEndWorld, GUIDE_LINE_WIDTH);
-                    Handles.color = k_GuideLineInactiveColor;
-                    Handles.DrawLine(hStartWorld, hEndWorld, GUIDE_LINE_WIDTH);
+                    Handles.DrawLine(vStartWorld, vEndWorld, Style.GUIDE_LINE_WIDTH);
+                    Handles.color = Style.GuideLineInactiveColor;
+                    Handles.DrawLine(hStartWorld, hEndWorld, Style.GUIDE_LINE_WIDTH);
                 }
             }
 
             Handles.color = originalColor;
         }
 
+        #endregion
+
+        #region UI Logic
+
+        /// <summary>
+        /// Draws the visual representation of a tracked point.
+        /// </summary>
+        /// <param name="position">Position to draw at.</param>
+        /// <param name="index">Index of the point.</param>
+        /// <param name="sceneView">Current scene view.</param>
+        /// <param name="isEditing">Whether the tracker is in edit mode.</param>
+        /// <param name="isTrackerEnabled">Whether the tracker is enabled.</param>
+        private void DrawPointVisuals(Vector3 position, int index, SceneView sceneView, bool isEditing, bool isTrackerEnabled)
+        {
+            var tracker = Tracker;
+            var point = tracker.trackedPoints[index];
+
+            if (_isDragging && _selectedPointIndex == index)
+            {
+                position = _draggingPoint;
+
+                if (_isAxisConstrained || _isGuidelineKeyPressed)
+                {
+                    var constraintPoint = _isGuidelineKeyPressed && !_isAxisConstrained
+                        ? _draggingPoint
+                        : _constraintOrigin;
+                    DrawAxisGuidelines(constraintPoint, sceneView);
+                }
+            }
+
+            if (_showVertexConnections && (isEditing || isTrackerEnabled))
+            {
+                DrawVertexConnections(position, point);
+            }
+
+            if (isEditing)
+            {
+                Handles.color = Style.RadiusColor;
+                Handles.DrawWireDisc(position, Vector3.forward, point.radius, 2f);
+            }
+
+            Handles.color = GetPointColor(index);
+
+            if (!isTrackerEnabled && !isEditing)
+            {
+                DrawSimplePoint(position);
+            }
+            else
+            {
+                DrawFullHandle(position);
+            }
+
+            if (Event.current.alt)
+            {
+                DrawIndexLabel(position, index);
+            }
+        }
+
+        /// <summary>
+        /// Draws connections between a point and its referenced vertices.
+        /// </summary>
+        /// <param name="position">Position of the point.</param>
+        /// <param name="point">The tracked point data.</param>
+        private void DrawVertexConnections(Vector3 position, PointDeformationTracker.TrackedPoint point)
+        {
+            var originalColor = Handles.color;
+
+            for (int i = 0; i < point.vertexReferences.Length; i++)
+            {
+                var vertexRef = point.vertexReferences[i];
+                var drawable = Tracker.includedDrawables[vertexRef.drawableIndex];
+                var vertex = drawable.VertexPositions[vertexRef.vertexIndex];
+
+                float alpha = Mathf.Clamp01(vertexRef.weight * Style.VERTEX_WEIGHT_MULTIPLIER) * Style.VERTEX_ALPHA_MULTIPLIER;
+                Handles.color = new Color(Style.VertexReferenceColor.r, Style.VertexReferenceColor.g,
+                                         Style.VertexReferenceColor.b, alpha);
+
+                Handles.DrawLine(position, vertex, Style.VERTEX_LINE_WIDTH);
+                Handles.DrawSolidDisc(vertex, Vector3.forward, Style.HANDLE_SIZE * Style.VERTEX_POINT_SIZE_MULTIPLIER * alpha);
+            }
+
+            Handles.color = originalColor;
+        }
+
+        /// <summary>
+        /// Gets the color for a point based on its state.
+        /// </summary>
+        /// <param name="index">Index of the point.</param>
+        /// <returns>The color to use for the point.</returns>
+        private Color GetPointColor(int index)
+        {
+            if (_isDeleteMode)
+                return Style.HandleColorDelete;
+
+            if (_selectedPointIndex == index)
+                return Style.HandleColorSelected;
+
+            return _isEditing ? Style.HandleColorEdit : Style.HandleColorNormal;
+        }
+
+        /// <summary>
+        /// Draws a simple point representation.
+        /// </summary>
+        /// <param name="position">Position to draw at.</param>
+        private void DrawSimplePoint(Vector3 position)
+        {
+            float smallPointSize = Style.HANDLE_SIZE * Style.SMALL_POINT_SIZE_MULTIPLIER;
+            Handles.DrawSolidDisc(position, Vector3.forward, smallPointSize);
+        }
+
+        /// <summary>
+        /// Draws a full handle representation for a point.
+        /// </summary>
+        /// <param name="position">Position to draw at.</param>
+        private void DrawFullHandle(Vector3 position)
+        {
+            Handles.DrawWireArc(position, Vector3.forward, Vector3.right, 360f,
+                               Style.HANDLE_SIZE * 0.5f, Style.HANDLE_LINE_WIDTH);
+
+            float crossSize = Style.HANDLE_SIZE * Style.CROSS_SIZE_MULTIPLIER;
+            Handles.DrawLine(
+                position + new Vector3(-crossSize, -crossSize, 0),
+                position + new Vector3(crossSize, crossSize, 0),
+                Style.HANDLE_LINE_WIDTH
+            );
+            Handles.DrawLine(
+                position + new Vector3(-crossSize, crossSize, 0),
+                position + new Vector3(crossSize, -crossSize, 0),
+                Style.HANDLE_LINE_WIDTH
+            );
+        }
+
+        /// <summary>
+        /// Draws an index label near a point.
+        /// </summary>
+        /// <param name="position">Position of the point.</param>
+        /// <param name="index">Index to display.</param>
+        private void DrawIndexLabel(Vector3 position, int index)
+        {
+            Vector3 labelPosition = position + Vector3.up * Style.HANDLE_SIZE * Style.LABEL_POSITION_OFFSET_MULTIPLIER;
+            Handles.Label(labelPosition, index.ToString(), LabelStyle);
+        }
+
+        #endregion
+
+        #region Auxiliary Code
+
+        /// <summary>
+        /// Converts a screen point to a world point on a plane.
+        /// </summary>
+        /// <param name="screenPoint">Screen point to convert.</param>
+        /// <param name="plane">Plane to project onto.</param>
+        /// <returns>World point on the plane.</returns>
         private Vector3 GetWorldPointOnPlane(Vector3 screenPoint, Plane plane)
         {
             Ray ray = HandleUtility.GUIPointToWorldRay(screenPoint);
@@ -549,17 +593,20 @@ namespace Live2D.Cubism.Editor.Inspectors
             return ray.origin;
         }
 
+        /// <summary>
+        /// Calculates the position of a tracked point.
+        /// </summary>
+        /// <param name="tracker">The tracker component.</param>
+        /// <param name="index">Index of the point.</param>
+        /// <returns>The calculated position.</returns>
         private Vector3 CalculatePointPosition(PointDeformationTracker tracker, int index)
         {
-            // In play mode, use the runtime position
             if (Application.isPlaying)
                 return tracker.GetCurrentPosition(index);
 
-            // If dragging this point, return drag position
             if (_isDragging && _selectedPointIndex == index)
                 return _draggingPoint;
 
-            // Otherwise calculate from vertex references
             if (index >= 0 && index < tracker.trackedPoints.Length)
             {
                 var point = tracker.trackedPoints[index];
@@ -567,59 +614,55 @@ namespace Live2D.Cubism.Editor.Inspectors
                     return tracker.CalculatePointPosition(index);
             }
 
-            // Fallback for points with no references
             return Vector3.zero;
         }
 
+        /// <summary>
+        /// Deletes a tracked point.
+        /// </summary>
+        /// <param name="index">Index of the point to delete.</param>
         private void DeletePoint(int index)
         {
-            // Record the state for undo before making any changes
             Undo.RecordObject(Tracker, "Delete Track Point");
 
             var points = Tracker.trackedPoints;
 
-            // Check if the index is valid
             if (index < 0 || index >= points.Length)
                 return;
 
-            // Create a new array with one less element
             var newPoints = new PointDeformationTracker.TrackedPoint[points.Length - 1];
 
-            // Copy elements before the index
             if (index > 0)
                 Array.Copy(points, 0, newPoints, 0, index);
 
-            // Copy elements after the index
             if (index < points.Length - 1)
                 Array.Copy(points, index + 1, newPoints, index, points.Length - index - 1);
 
             Tracker.trackedPoints = newPoints;
-
-            // Reset selection
             _selectedPointIndex = -1;
 
             EditorUtility.SetDirty(Tracker);
             SceneView.RepaintAll();
         }
 
-        private void AdjustPointRadius(int index, float delta, SceneView sceneView)
+        /// <summary>
+        /// Adjusts the radius of a tracked point.
+        /// </summary>
+        /// <param name="index">Index of the point.</param>
+        /// <param name="delta">Amount to adjust by.</param>
+        private void AdjustPointRadius(int index, float delta)
         {
             var tracker = Tracker;
             var point = tracker.trackedPoints[index];
 
-            // Calculate current position
             Vector3 position = CalculatePointPosition(tracker, index);
             Vector2 point2D = new Vector2(position.x, position.y);
 
-            // Adjust radius with mouse wheel (negative to make scrolling down reduce radius)
-            // Reduced scale factor for more subtle adjustments
-            float newRadius = Mathf.Max(point.radius - delta * 0.002f, RADIUS_MINIMUM_SIZE); // Smaller scale factor for finer control
+            float newRadius = Mathf.Max(point.radius - delta * 0.002f, Style.RADIUS_MINIMUM_SIZE);
 
             Undo.RecordObject(tracker, "Change Point Radius");
 
             point.radius = newRadius;
-
-            // Update vertex references based on new radius
             point.vertexReferences = FindVerticesInRadius(
                 point2D,
                 point.radius,
@@ -628,9 +671,43 @@ namespace Live2D.Cubism.Editor.Inspectors
 
             tracker.trackedPoints[index] = point;
             EditorUtility.SetDirty(tracker);
-
-            sceneView.Repaint();
         }
+
+        #endregion
+
+        #region Styling Information
+        /// <summary>
+        /// Styling constants and colors for the point deformation tracker editor
+        /// </summary>
+        private static class Style
+        {
+            // Size constants
+            public const float HANDLE_SIZE = 0.015f;
+            public const float HANDLE_LINE_WIDTH = 4f;
+            public const float GUIDE_LINE_WIDTH = 4f;
+            public const float SMALL_POINT_SIZE_MULTIPLIER = 0.25f;
+            public const float CROSS_SIZE_MULTIPLIER = 0.35f;
+            public const float LABEL_POSITION_OFFSET_MULTIPLIER = 0.8f;
+            public const float RADIUS_MINIMUM_SIZE = 0.0001f;
+
+            // Colors
+            public static readonly Color HandleColorNormal = new Color(1f, 0.92f, 0.016f);
+            public static readonly Color HandleColorEdit = new Color(0.2f, 0.9f, 0.2f);
+            public static readonly Color HandleColorSelected = new Color(0.2f, 0.2f, 0.9f);
+            public static readonly Color HandleColorDelete = new Color(1f, 0f, 0f);
+            public static readonly Color RadiusColor = new Color(0.4f, 0.7f, 1.0f, 0.3f);
+            public static readonly Color VertexReferenceColor = new Color(0.2f, 0.6f, 1.0f, 0.8f);
+            public static readonly Color GuideLineColor = new Color(1f, 1f, 1f, 0.75f);
+            public static readonly Color GuideLineConstraintColor = new Color(1f, 0.5f, 0.5f, 1f);
+            public static readonly Color GuideLineInactiveColor = new Color(1f, 1f, 1f, 0.5f);
+
+            // Vertex connection constants
+            public const float VERTEX_WEIGHT_MULTIPLIER = 1.6f;
+            public const float VERTEX_ALPHA_MULTIPLIER = 0.7f;
+            public const float VERTEX_LINE_WIDTH = 1.5f;
+            public const float VERTEX_POINT_SIZE_MULTIPLIER = 0.5f;
+        }
+
 
         #endregion
     }
