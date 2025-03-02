@@ -8,6 +8,9 @@ using System.Collections.Generic;
 using Live2D.Cubism.Core;
 using System.Linq;
 
+// Reference to the partial file containing IncludeDrawablesWindow
+// Assets/Scripts/Editor/Live2DDeformationTrackerIncludeDrawablesWindow.cs
+
 [CustomEditor(typeof(Live2DDeformationTracker))]
 public sealed partial class Live2DDeformationTrackerEditor : Editor
 {
@@ -62,19 +65,6 @@ public sealed partial class Live2DDeformationTrackerEditor : Editor
 
         AddStyleSheet();
         CreateInspectorElements();
-
-        // Register callback to detect when the includedDrawables property changes
-        _root.RegisterCallback<AttachToPanelEvent>(evt =>
-        {
-            // When the inspector is shown, start tracking changes
-            EditorApplication.update += CheckForDrawablesChanges;
-        });
-
-        _root.RegisterCallback<DetachFromPanelEvent>(evt =>
-        {
-            // When the inspector is hidden, stop tracking changes
-            EditorApplication.update -= CheckForDrawablesChanges;
-        });
 
         return _root;
 
@@ -161,78 +151,6 @@ public sealed partial class Live2DDeformationTrackerEditor : Editor
     {
         ResetEditorState();
         SceneView.RepaintAll();
-    }
-
-    private void OnSceneGUI()
-    {
-        if (!IsExpanded)
-            return;
-
-        var sceneView = SceneView.currentDrawingSceneView;
-        var currentEvent = Event.current;
-
-        // Drawing and point handling will use HandlePointInteraction for event handling
-        SetupSceneViewForEditing();
-        DrawAndHandlePoints(sceneView);
-
-        if (!_isEditing)
-            return;
-
-        // New point creation logic
-        if (currentEvent.type == EventType.MouseDown &&
-            currentEvent.button == (int)MouseButton.LeftMouse &&
-            currentEvent.control &&
-            !_isDeleteMode)
-        {
-            CreatePointAtMousePosition();
-            currentEvent.Use(); // Consume the event
-        }
-
-        if (currentEvent.type == EventType.MouseMove)
-            sceneView.Repaint();
-    }
-
-    private void CreatePointAtMousePosition()
-    {
-        Vector3 mousePosition = Event.current.mousePosition;
-        Ray ray = HandleUtility.GUIPointToWorldRay(mousePosition);
-        Plane plane = new Plane(Tracker.transform.forward, Tracker.transform.position);
-
-        if (plane.Raycast(ray, out float distance))
-        {
-            Vector3 newPointPosition = ray.GetPoint(distance);
-            AddNewTrackedPoint(newPointPosition);
-        }
-    }
-
-    private void AddNewTrackedPoint(Vector3 position)
-    {
-        Undo.RecordObject(Tracker, "Create Track Point");
-
-        // Convert to local position
-        Vector3 localPosition = Tracker.transform.InverseTransformPoint(position);
-        Vector2 point2D = new Vector2(localPosition.x, localPosition.y);
-
-        // Create new tracked point with radius value
-        var newTrackedPoint = new Live2DDeformationTracker.TrackedPoint
-        {
-            radius = DEFAULT_RADIUS
-        };
-
-        // Find vertices within radius
-        newTrackedPoint.vertexReferences = FindVerticesInRadius(
-            point2D,
-            DEFAULT_RADIUS,
-            Tracker.includedDrawables
-        );
-
-        // Add the new point to the tracked points array
-        Array.Resize(ref Tracker.trackedPoints, Tracker.trackedPoints.Length + 1);
-        int newIndex = Tracker.trackedPoints.Length - 1;
-        Tracker.trackedPoints[newIndex] = newTrackedPoint;
-
-        // Mark the tracker as dirty to save changes
-        EditorUtility.SetDirty(Tracker);
     }
 
     #endregion
@@ -344,15 +262,6 @@ public sealed partial class Live2DDeformationTrackerEditor : Editor
         _isDragging = false;
     }
 
-    private void SetupSceneViewForEditing()
-    {
-        if (!_isEditing)
-            return;
-
-        Tools.current = Tool.None;
-        HandleUtility.AddDefaultControl(GUIUtility.GetControlID(FocusType.Passive));
-    }
-
     private static GUIStyle CreateLabelStyle()
     {
         var style = new GUIStyle(EditorStyles.miniLabel)
@@ -387,152 +296,7 @@ public sealed partial class Live2DDeformationTrackerEditor : Editor
         }
 
         // Create a dialog to select which drawables to include
-        IncludeDrawablesWindow.ShowWindow(Tracker, allDrawables);
-    }
-
-    // Define a window for including drawables
-    private class IncludeDrawablesWindow : EditorWindow
-    {
-        private Live2DDeformationTracker _tracker;
-        private IList<CubismDrawable> _allDrawables;
-        private Dictionary<string, bool> _inclusionStates = new Dictionary<string, bool>();
-        private Vector2 _scrollPosition;
-        private string _searchString;
-
-        public static void ShowWindow(Live2DDeformationTracker tracker, IList<CubismDrawable> allDrawables)
-        {
-            var window = GetWindow<IncludeDrawablesWindow>("Include Drawables");
-            window.minSize = new Vector2(300, 400);
-            window._tracker = tracker;
-            window._allDrawables = allDrawables;
-            window.InitializeInclusionStates();
-            window.Show();
-        }
-
-        private void InitializeInclusionStates()
-        {
-            _inclusionStates.Clear();
-
-            foreach (var drawable in _allDrawables)
-            {
-                // Check if the drawable is already in the included array
-                bool isIncluded = _tracker.includedDrawables != null &&
-                                 System.Array.Exists(_tracker.includedDrawables, d => d == drawable);
-
-                _inclusionStates[drawable.name] = isIncluded;
-            }
-        }
-
-        private void OnGUI()
-        {
-            if (_tracker == null || _allDrawables == null)
-            {
-                Close();
-                return;
-            }
-
-            EditorGUILayout.LabelField("Select drawables to include", EditorStyles.boldLabel);
-            EditorGUILayout.Space();
-
-            // Search field
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Filter:", GUILayout.Width(50));
-            string searchString = EditorGUILayout.TextField(_searchString ?? "");
-            if (searchString != _searchString)
-            {
-                _searchString = searchString;
-            }
-            EditorGUILayout.EndHorizontal();
-
-            // Buttons for selecting all/none
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Select All"))
-            {
-                foreach (var key in _inclusionStates.Keys.ToList())
-                {
-                    _inclusionStates[key] = true;
-                }
-            }
-
-            if (GUILayout.Button("Select None"))
-            {
-                foreach (var key in _inclusionStates.Keys.ToList())
-                {
-                    _inclusionStates[key] = false;
-                }
-            }
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space();
-
-            // Drawable list with checkboxes
-            _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
-
-            foreach (var drawable in _allDrawables)
-            {
-                // Skip if filtered out
-                if (!string.IsNullOrEmpty(_searchString) &&
-                    !drawable.name.ToLower().Contains(_searchString.ToLower()))
-                {
-                    continue;
-                }
-
-                bool isIncluded = _inclusionStates[drawable.name];
-                bool newValue = EditorGUILayout.Toggle(drawable.name, isIncluded);
-
-                if (newValue != isIncluded)
-                {
-                    _inclusionStates[drawable.name] = newValue;
-                }
-            }
-
-            EditorGUILayout.EndScrollView();
-
-            EditorGUILayout.Space();
-
-            // Save and close buttons
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Apply"))
-            {
-                SaveInclusions();
-            }
-
-            if (GUILayout.Button("Cancel"))
-            {
-                Close();
-            }
-            EditorGUILayout.EndHorizontal();
-        }
-
-        private void SaveInclusions()
-        {
-            Undo.RecordObject(_tracker, "Update Included Drawables");
-
-            // Create a new list of included drawables
-            List<CubismDrawable> includedList = new List<CubismDrawable>();
-
-            foreach (var pair in _inclusionStates)
-            {
-                if (pair.Value)
-                {
-                    // Find the drawable by name
-                    var drawable = _allDrawables.FirstOrDefault(d => d.name == pair.Key);
-                    if (drawable != null)
-                    {
-                        includedList.Add(drawable);
-                    }
-                }
-            }
-
-            // Convert list to array and set it
-            _tracker.includedDrawables = includedList.ToArray();
-
-            // Recalculate all tracked points
-            RecalculateTrackedPoints(_tracker);
-
-            EditorUtility.SetDirty(_tracker);
-            Close();
-        }
+        DrawableSelectionWindow.ShowWindow(Tracker, allDrawables);
     }
 
     #endregion
@@ -969,43 +733,4 @@ public sealed partial class Live2DDeformationTrackerEditor : Editor
     }
 
     #endregion
-
-    // Method to check for changes in the includedDrawables list
-    private void CheckForDrawablesChanges()
-    {
-        if (target == null) return;
-
-        Live2DDeformationTracker tracker = target as Live2DDeformationTracker;
-        if (tracker == null || tracker.includedDrawables == null) return;
-
-        // Compare the current array with the previous cached array
-        bool drawablesChanged = false;
-
-        if (_previousDrawables.Length != tracker.includedDrawables.Length)
-        {
-            drawablesChanged = true;
-        }
-        else
-        {
-            // Check if any elements changed
-            for (int i = 0; i < _previousDrawables.Length; i++)
-            {
-                if (i >= tracker.includedDrawables.Length || _previousDrawables[i] != tracker.includedDrawables[i])
-                {
-                    drawablesChanged = true;
-                    break;
-                }
-            }
-        }
-
-        // If drawables changed, recalculate points
-        if (drawablesChanged)
-        {
-            RecalculateTrackedPoints(tracker);
-
-            // Update cached array
-            _previousDrawables = new CubismDrawable[tracker.includedDrawables.Length];
-            tracker.includedDrawables.CopyTo(_previousDrawables, 0);
-        }
-    }
 }

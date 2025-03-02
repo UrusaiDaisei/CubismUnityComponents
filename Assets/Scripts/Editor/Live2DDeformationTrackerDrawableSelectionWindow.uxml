@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xmlns="UnityEngine.UIElements" 
+      xmlns:editor="UnityEditor.UIElements">
+    
+    <VisualElement class="drawable-selection-container">
+        <Label text="Select drawables to include" class="title-label"/>
+        
+        <VisualElement class="lists-container">
+            <!-- Left Panel - Included Drawables -->
+            <VisualElement class="panel-container">
+                <Label text="Included Drawables" class="panel-label"/>
+                <VisualElement class="search-container">
+                    <VisualElement class="search-icon"/>
+                    <TextField name="included-search-field" placeholder="Search by name" class="search-field"/>
+                </VisualElement>
+                <ScrollView name="included-scroll-view" class="drawable-scroll-view">
+                    <VisualElement name="included-list-container" class="drawable-list-container"/>
+                </ScrollView>
+            </VisualElement>
+            
+            <!-- Middle - Navigation Buttons -->
+            <VisualElement class="navigation-container">
+                <Button name="move-right-button" text="&gt;" class="nav-button"/>
+                <Button name="move-all-right-button" text="&gt;&gt;" class="nav-button"/>
+                <Button name="move-left-button" text="&lt;" class="nav-button"/>
+                <Button name="move-all-left-button" text="&lt;&lt;" class="nav-button"/>
+            </VisualElement>
+            
+            <!-- Right Panel - Available Drawables -->
+            <VisualElement class="panel-container">
+                <Label text="Available Drawables" class="panel-label"/>
+                <VisualElement class="search-container">
+                    <VisualElement class="search-icon"/>
+                    <TextField name="available-search-field" placeholder="Search by name" class="search-field"/>
+                </VisualElement>
+                <ScrollView name="available-scroll-view" class="drawable-scroll-view">
+                    <VisualElement name="available-list-container" class="drawable-list-container"/>
+                </ScrollView>
+            </VisualElement>
+        </VisualElement>
+        
+        <VisualElement class="button-container action-buttons">
+            <Button text="Cancel" name="cancel-button" class="action-button"/>
+            <Button text="Apply" name="apply-button" class="action-button"/>
+        </VisualElement>
+    </VisualElement>
+    
+</UXML> 

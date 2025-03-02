@@ -1,0 +1,135 @@
+.drawable-selection-container {
+    padding: 10px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.title-label {
+    -unity-font-style: bold;
+    font-size: 14px;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.panel-label {
+    -unity-font-style: bold;
+    font-size: 12px;
+    margin-bottom: 5px;
+    padding-left: 2px;
+}
+
+.lists-container {
+    flex-direction: row;
+    flex-grow: 1;
+    min-height: 300px;
+    width: 100%;
+}
+
+.panel-container {
+    flex: 1;
+    flex-direction: column;
+    margin: 0 5px;
+    min-width: 0;
+}
+
+.search-container {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.search-icon {
+    width: 16px;
+    height: 16px;
+    background-image: url("d_search_icon");
+    -unity-background-scale-mode: scale-to-fit;
+    margin-right: 5px;
+    opacity: 0.6;
+}
+
+.navigation-container {
+    width: 50px;
+    flex-shrink: 0;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin: 0 5px;
+}
+
+.nav-button {
+    width: 30px;
+    height: 30px;
+    margin: 5px 0;
+    padding: 0;
+    border-radius: 3px;
+    border-width: 1px;
+    border-color: var(--unity-colors-default-border);
+    background-color: var(--unity-colors-button-background);
+    color: var(--unity-colors-button-text);
+    transition: all 0.1s;
+}
+
+.nav-button:hover {
+    background-color: var(--unity-colors-button-background-hover);
+}
+
+.search-field {
+    flex-grow: 1;
+}
+
+.drawable-scroll-view {
+    flex-grow: 1;
+    background-color: var(--unity-colors-inspector-background);
+    border-width: 1px;
+    border-color: var(--unity-colors-default-border);
+    min-height: 200px;
+}
+
+.drawable-list-container {
+    padding: 5px;
+}
+
+.drawable-item {
+    padding: 4px 8px;
+    margin: 2px 0;
+    border-radius: 2px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.drawable-item:hover {
+    background-color: var(--unity-colors-alternated_rows-background);
+}
+
+.drawable-item.selected {
+    background-color: var(--unity-colors-highlight-background);
+    color: var(--unity-colors-highlight-text);
+}
+
+.button-container {
+    flex-direction: row;
+    margin-top: 10px;
+    flex-shrink: 0;
+}
+
+.action-buttons {
+    justify-content: flex-end;
+}
+
+.action-button {
+    min-width: 80px;
+    padding: 5px 10px;
+    border-radius: 3px;
+    border-width: 1px;
+    border-color: var(--unity-colors-default-border);
+    background-color: var(--unity-colors-button-background);
+    color: var(--unity-colors-button-text);
+    transition: all 0.1s;
+}
+
+.action-button:hover {
+    background-color: var(--unity-colors-button-background-hover);
+} 

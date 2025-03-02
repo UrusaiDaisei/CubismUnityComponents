@@ -1,6 +1,7 @@
 using System;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 public sealed partial class Live2DDeformationTrackerEditor
 {
@@ -28,6 +29,87 @@ public sealed partial class Live2DDeformationTrackerEditor
     private static readonly Color k_GuideLineInactiveColor = new Color(1f, 1f, 1f, 0.5f);
 
     #endregion
+
+    private void OnSceneGUI()
+    {
+        if (!IsExpanded)
+            return;
+
+        var sceneView = SceneView.currentDrawingSceneView;
+        var currentEvent = Event.current;
+
+        // Drawing and point handling will use HandlePointInteraction for event handling
+        SetupSceneViewForEditing();
+        DrawAndHandlePoints(sceneView);
+
+        if (!_isEditing)
+            return;
+
+        // New point creation logic
+        if (currentEvent.type == EventType.MouseDown &&
+            currentEvent.button == (int)MouseButton.LeftMouse &&
+            currentEvent.control &&
+            !_isDeleteMode)
+        {
+            CreatePointAtMousePosition();
+            currentEvent.Use(); // Consume the event
+        }
+
+        if (currentEvent.type == EventType.MouseMove)
+            sceneView.Repaint();
+    }
+
+    private void SetupSceneViewForEditing()
+    {
+        if (!_isEditing)
+            return;
+
+        Tools.current = Tool.None;
+        HandleUtility.AddDefaultControl(GUIUtility.GetControlID(FocusType.Passive));
+    }
+
+    private void CreatePointAtMousePosition()
+    {
+        Vector3 mousePosition = Event.current.mousePosition;
+        Ray ray = HandleUtility.GUIPointToWorldRay(mousePosition);
+        Plane plane = new Plane(Tracker.transform.forward, Tracker.transform.position);
+
+        if (plane.Raycast(ray, out float distance))
+        {
+            Vector3 newPointPosition = ray.GetPoint(distance);
+            AddNewTrackedPoint(newPointPosition);
+        }
+    }
+
+    private void AddNewTrackedPoint(Vector3 position)
+    {
+        Undo.RecordObject(Tracker, "Create Track Point");
+
+        // Convert to local position
+        Vector3 localPosition = Tracker.transform.InverseTransformPoint(position);
+        Vector2 point2D = new Vector2(localPosition.x, localPosition.y);
+
+        // Create new tracked point with radius value
+        var newTrackedPoint = new Live2DDeformationTracker.TrackedPoint
+        {
+            radius = DEFAULT_RADIUS
+        };
+
+        // Find vertices within radius
+        newTrackedPoint.vertexReferences = FindVerticesInRadius(
+            point2D,
+            DEFAULT_RADIUS,
+            Tracker.includedDrawables
+        );
+
+        // Add the new point to the tracked points array
+        Array.Resize(ref Tracker.trackedPoints, Tracker.trackedPoints.Length + 1);
+        int newIndex = Tracker.trackedPoints.Length - 1;
+        Tracker.trackedPoints[newIndex] = newTrackedPoint;
+
+        // Mark the tracker as dirty to save changes
+        EditorUtility.SetDirty(Tracker);
+    }
 
     #region Point Handling
 
