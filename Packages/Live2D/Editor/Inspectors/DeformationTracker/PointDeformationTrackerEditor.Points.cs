@@ -598,20 +598,10 @@ namespace Live2D.Cubism.Editor.Inspectors
         /// <returns>The calculated position.</returns>
         private Vector3 CalculatePointPosition(PointDeformationTracker tracker, int index)
         {
-            if (Application.isPlaying)
-                return tracker.GetCurrentPosition(index);
-
-            if (_isDragging && _selectedPointIndex == index)
+            if (!Application.isPlaying && _isDragging && _selectedPointIndex == index)
                 return _draggingPoint;
 
-            if (index >= 0 && index < tracker.trackedPoints.Length)
-            {
-                var point = tracker.trackedPoints[index];
-                if (point.vertexReferences != null && point.vertexReferences.Length > 0)
-                    return tracker.CalculatePointPosition(index);
-            }
-
-            return Vector3.zero;
+            return tracker.GetTrackedPosition(index);
         }
 
         /// <summary>

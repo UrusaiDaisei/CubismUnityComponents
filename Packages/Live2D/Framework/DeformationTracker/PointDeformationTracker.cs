@@ -59,55 +59,13 @@ namespace Live2D.Cubism.Framework
                 return _model;
             }
         }
-        private Vector3[] _currentPositions;
 
         #endregion
 
-        #region Unity Methods
-
-        private void Awake()
-        {
-            // Initialize positions array
-            _currentPositions = new Vector3[trackedPoints.Length];
-        }
-
-        private void OnEnable()
-        {
-            UpdateTrackedPoints();
-
-            // Subscribe to each drawable's update event
-            foreach (var drawable in includedDrawables)
-            {
-                drawable.VertexPositionsDidChange.AddListener(OnVertexPositionsChanged);
-            }
-        }
-
-        private void OnDisable()
-        {
-            foreach (var drawable in includedDrawables)
-            {
-                drawable.VertexPositionsDidChange.RemoveListener(OnVertexPositionsChanged);
-            }
-        }
-
-        #endregion
-
-        #region Private Methods
-
-        private void OnVertexPositionsChanged(CubismDrawable drawable)
-        {
-            UpdateTrackedPoints();
-        }
-
-        private void UpdateTrackedPoints()
-        {
-            for (int i = 0; i < trackedPoints.Length; i++)
-            {
-                _currentPositions[i] = CalculatePointPosition(i);
-            }
-        }
-
-        internal Vector3 CalculatePointPosition(int pointIndex)
+        /// <summary>
+        /// Gets the current calculated position for a tracked point.
+        /// </summary>
+        public Vector3 GetTrackedPosition(int pointIndex)
         {
             var point = trackedPoints[pointIndex];
 
@@ -128,17 +86,5 @@ namespace Live2D.Cubism.Framework
             // Return the weighted average or zero if no valid references
             return totalWeight > 0 ? result / totalWeight : Vector3.zero;
         }
-
-        /// <summary>
-        /// Gets the current calculated position for a tracked point.
-        /// </summary>
-        public Vector3 GetCurrentPosition(int index)
-        {
-            if (index < 0 || index >= _currentPositions.Length)
-                return Vector3.zero;
-            return _currentPositions[index];
-        }
-
-        #endregion
     }
 }
