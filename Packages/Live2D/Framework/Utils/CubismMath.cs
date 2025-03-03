@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Live2D.Cubism.Framework.Utils
 {
-    public class CubismMath : MonoBehaviour
+    public static class CubismMath
     {
         /// <summary>
         /// Returns the remainder of the division of two numbers.
