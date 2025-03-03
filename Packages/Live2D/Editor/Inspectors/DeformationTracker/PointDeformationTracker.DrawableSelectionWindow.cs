@@ -437,6 +437,7 @@ namespace Live2D.Cubism.Editor.Inspectors
                 // Recalculate all tracked points
                 RecalculateTrackedPoints(_tracker);
 
+
                 EditorUtility.SetDirty(_tracker);
                 Close();
             }

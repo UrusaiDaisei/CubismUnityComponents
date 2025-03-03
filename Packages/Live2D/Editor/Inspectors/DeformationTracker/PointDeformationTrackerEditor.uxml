@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xmlns="UnityEngine.UIElements" 
+      xmlns:editor="UnityEditor.UIElements">
+    
+    <VisualElement>
+        <!-- Script Property Field (auto-generated) -->
+        <VisualElement name="script-container">
+            <!-- Will be populated with Script property field -->
+        </VisualElement>
+        
+        <!-- Main Action Buttons -->
+        <VisualElement class="action-buttons">
+            <Button name="edit-points-button" text="Edit Points" />
+            <Button name="include-drawables-button" text="Include Drawables" class="no-right-margin" />
+        </VisualElement>
+        
+        <!-- Visualization Options -->
+        <Foldout text="Visualization Options" value="true">
+            <Toggle name="show-vertex-connections" label="Show Vertex Connections" />
+        </Foldout>
+        
+        <!-- Statistics -->
+        <VisualElement name="stats-container">
+            <Label name="stats-text" />
+        </VisualElement>
+        
+        <!-- Edit Mode Instructions (initially hidden) -->
+        <HelpBox name="edit-instructions-container" message-type="Info" text="Edit Mode Instructions:" style="display: none;">
+            <VisualElement name="instructions-list">
+                <!-- Directly define the instruction items -->
+                <VisualElement class="instruction-item">
+                    <Label text="•" class="bullet-point" />
+                    <Label text="Ctrl + Click: Add a new point at mouse position" class="instruction-text" />
+                </VisualElement>
+                <VisualElement class="instruction-item">
+                    <Label text="•" class="bullet-point" />
+                    <Label text="Click + Drag: Move a selected point" class="instruction-text" />
+                </VisualElement>
+                <VisualElement class="instruction-item">
+                    <Label text="•" class="bullet-point" />
+                    <Label text="E key (hold): Enable delete mode (click on points to delete them)" class="instruction-text" />
+                </VisualElement>
+                <VisualElement class="instruction-item">
+                    <Label text="•" class="bullet-point" />
+                    <Label text="A key (while dragging): Constrain movement to current axis" class="instruction-text" />
+                </VisualElement>
+                <VisualElement class="instruction-item">
+                    <Label text="•" class="bullet-point" />
+                    <Label text="G key (hold): Show axis guidelines while moving points" class="instruction-text" />
+                </VisualElement>
+                <VisualElement class="instruction-item">
+                    <Label text="•" class="bullet-point" />
+                    <Label text="Ctrl + Scroll Wheel: Adjust point radius" class="instruction-text" />
+                </VisualElement>
+            </VisualElement>
+        </HelpBox>
+    </VisualElement>
+    
+</UXML> 

@@ -1,19 +1,12 @@
-using System;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.UIElements;
-using System.Collections.Generic;
-using Live2D.Cubism.Core;
 using Live2D.Cubism.Framework;
-using System.Linq;
 
 namespace Live2D.Cubism.Editor.Inspectors
 {
-    // Reference to the partial file containing IncludeDrawablesWindow
-    // Assets/Scripts/Editor/PointDeformationTrackerIncludeDrawablesWindow.cs
-
     [CustomEditor(typeof(PointDeformationTracker))]
     public sealed partial class PointDeformationTrackerEditor : UnityEditor.Editor
     {
@@ -21,46 +14,22 @@ namespace Live2D.Cubism.Editor.Inspectors
 
         private const string BasePath = "Packages/com.live2d.cubism/Editor/Inspectors/DeformationTracker/";
 
-        private static readonly Color k_LabelBackgroundColor = new Color(0, 0, 0, 0.7f);
-        private static GUIStyle k_LabelStyle = null;
-        private static GUIStyle LabelStyle
-        {
-            get
-            {
-                if (k_LabelStyle == null)
-                    k_LabelStyle = CreateLabelStyle();
-
-                return k_LabelStyle;
-            }
-        }
-
-        // Default radius value
-        private const float DEFAULT_RADIUS = 0.1f;
-
         #endregion
 
         #region Runtime State
 
         private VisualElement _root;
         private Button _editButton;
+        private Button _includeDrawablesButton;
+        private Toggle _showVertexConnectionsToggle;
+        private Label _statsTextLabel;
+        private VisualElement _editInstructionsContainer;
+        private VisualElement _instructionsList;
         private bool _isEditing;
-        private bool _isDeleteMode;
-        private int _selectedPointIndex = -1;
-        private bool _isDragging;
-        private Vector3 _dragStartPosition;
-        private Vector3 _draggingPoint;
-        private bool _isAxisConstrained;
-        private Vector3 _constraintOrigin;
-        private bool _isAxisConstraintKeyPressed;
-        private bool _isGuidelineKeyPressed;
         private bool _showVertexConnections = false;
 
         private bool IsExpanded => InternalEditorUtility.GetIsInspectorExpanded(target);
         private PointDeformationTracker Tracker => target as PointDeformationTracker;
-
-        private CubismDrawable[] _previousDrawables = new CubismDrawable[0];
-
-        private bool _styleSheetLoaded = false;
 
         #endregion
 
@@ -70,95 +39,123 @@ namespace Live2D.Cubism.Editor.Inspectors
         {
             _root = new VisualElement();
 
-            TryLoadStyleSheet();
-            CreateInspectorElements();
+            // Load and instantiate the UXML file
+            var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(BasePath + "PointDeformationTrackerEditor.uxml");
+            if (visualTree == null)
+                throw new System.Exception("Could not load PointDeformationTrackerEditor.uxml.");
 
-            return _root;
+            // Instantiate the UXML
+            visualTree.CloneTree(_root);
 
-            void TryLoadStyleSheet()
+            // Load the style sheet
+            var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(BasePath + "PointDeformationTrackerEditor.uss");
+            if (styleSheet != null)
             {
-                if (_styleSheetLoaded) return;
-
-                var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(BasePath + "PointDeformationTrackerEditor.uss");
-                if (styleSheet == null)
-                {
-                    Debug.LogWarning("Could not load PointDeformationTrackerEditor.uss style sheet.");
-                    return;
-                }
-
                 _root.styleSheets.Add(styleSheet);
-                _styleSheetLoaded = true;
+            }
+            else
+            {
+                Debug.LogError("Could not load PointDeformationTrackerEditor.uss style sheet.");
             }
 
-            void CreateInspectorElements()
+            // Get references to UI elements
+            _editButton = _root.Q<Button>("edit-points-button");
+            _includeDrawablesButton = _root.Q<Button>("include-drawables-button");
+            _showVertexConnectionsToggle = _root.Q<Toggle>("show-vertex-connections");
+            _statsTextLabel = _root.Q<Label>("stats-text");
+            _editInstructionsContainer = _root.Q("edit-instructions-container");
+            _instructionsList = _root.Q("instructions-list");
+
+            // Add script field to script container
+            var scriptContainer = _root.Q("script-container");
+            var scriptProperty = serializedObject.FindProperty("m_Script");
+            if (scriptProperty != null && scriptContainer != null)
             {
-                var iterator = serializedObject.GetIterator();
-                bool enterChildren = true;
+                var scriptField = new PropertyField(scriptProperty);
+                scriptField.SetEnabled(false);
+                scriptContainer.Add(scriptField);
+            }
 
-                while (iterator.NextVisible(enterChildren))
+            // Bind toggle for vertex connections
+            if (_showVertexConnectionsToggle != null)
+            {
+                _showVertexConnectionsToggle.value = _showVertexConnections;
+                _showVertexConnectionsToggle.RegisterValueChangedCallback(evt =>
                 {
-                    enterChildren = false;
+                    _showVertexConnections = evt.newValue;
+                    SceneView.RepaintAll();
+                });
+            }
 
-                    if (iterator.propertyPath == "trackedPoints")
-                    {
-                        CreateEditModeButton();
-                        CreateIncludeDrawablesButton();
-                        CreateVisualizationToggles();
-                    }
+            // Setup UI bindings
+            SetupUIBindings();
 
-                    // Skip adding the includedDrawables field directly to the inspector
-                    if (iterator.propertyPath == "includedDrawables")
-                    {
-                        // Display a read-only version of the field
-                        var container = new VisualElement();
-                        var header = new Label("Included Drawables (Use the 'Include Drawables' button to modify)");
-                        header.style.unityFontStyleAndWeight = FontStyle.Bold;
-                        header.style.marginTop = 5;
-                        header.style.marginBottom = 5;
+            // Initialize UI data
+            UpdateUI();
 
-                        container.Add(header);
+            return _root;
+        }
 
-                        // Create a disabled property field
-                        var propertyField = new PropertyField(iterator);
-                        propertyField.SetEnabled(false);
+        private void SetupUIBindings()
+        {
+            // Setup button click events
+            if (_editButton != null)
+            {
+                _editButton.clicked += ToggleEditMode;
+                UpdateEditButtonState();
+            }
 
-                        container.Add(propertyField);
-                        _root.Add(container);
-
-                        continue; // Skip the default property field addition below
-                    }
-
-                    var field = new PropertyField(iterator);
-                    _root.Add(field);
-                }
+            if (_includeDrawablesButton != null)
+            {
+                _includeDrawablesButton.clicked += ShowIncludeDrawablesDialog;
             }
         }
 
-        private void CreateIncludeDrawablesButton()
+        private void UpdateUI()
         {
-            var container = new VisualElement();
-            container.style.marginBottom = 10;
+            UpdateStatsText();
+            UpdateEditInstructionsVisibility();
+        }
 
-            var includeButton = new Button(ShowIncludeDrawablesDialog)
+        private void UpdateStatsText()
+        {
+            if (_statsTextLabel == null || Tracker == null)
+                return;
+
+            int drawablesCount = Tracker.includedDrawables?.Length ?? 0;
+            int pointsCount = Tracker.trackedPoints?.Length ?? 0;
+
+            _statsTextLabel.text = $"Statistics: {drawablesCount} drawables, {pointsCount} tracked points";
+        }
+
+        private void UpdateEditInstructionsVisibility()
+        {
+            if (_editInstructionsContainer == null)
+                return;
+
+            _editInstructionsContainer.style.display = _isEditing ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void UpdateEditButtonState()
+        {
+            if (_editButton == null)
+                return;
+
+            // Update button appearance based on edit mode
+            if (_isEditing)
             {
-                text = "Include Drawables"
-            };
-            includeButton.AddToClassList("edit-button");
-
-            container.Add(includeButton);
-            _root.Add(container);
+                _editButton.text = "Exit Edit Mode";
+                _editButton.AddToClassList("editing");
+            }
+            else
+            {
+                _editButton.text = "Edit Points";
+                _editButton.RemoveFromClassList("editing");
+            }
         }
 
         private void OnEnable()
         {
-            // Cache the current list of drawables for change detection
-            PointDeformationTracker tracker = target as PointDeformationTracker;
-            if (tracker != null && tracker.includedDrawables != null)
-            {
-                _previousDrawables = new CubismDrawable[tracker.includedDrawables.Length];
-                tracker.includedDrawables.CopyTo(_previousDrawables, 0);
-            }
-
             ResetEditorState();
         }
 
@@ -166,48 +163,6 @@ namespace Live2D.Cubism.Editor.Inspectors
         {
             ResetEditorState();
             SceneView.RepaintAll();
-        }
-
-        #endregion
-
-        #region UI Setup
-
-        private void CreateEditModeButton()
-        {
-            var container = new VisualElement();
-            container.style.marginBottom = 10;
-
-            _editButton = new Button(ToggleEditMode)
-            {
-                text = "Edit Points"
-            };
-            _editButton.AddToClassList("edit-button");
-
-            container.Add(_editButton);
-            UpdateEditButtonState();
-            _root.Add(container);
-        }
-
-        private void CreateVisualizationToggles()
-        {
-            var container = new VisualElement();
-            container.style.marginBottom = 10;
-            container.style.marginTop = 10;
-
-            var titleLabel = new Label("Visualization Options");
-            titleLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            titleLabel.style.marginBottom = 5;
-            container.Add(titleLabel);
-
-            var connectionsToggle = new Toggle("Show Vertex Connections") { value = _showVertexConnections };
-            connectionsToggle.RegisterValueChangedCallback(evt =>
-            {
-                _showVertexConnections = evt.newValue;
-                SceneView.RepaintAll();
-            });
-
-            container.Add(connectionsToggle);
-            _root.Add(container);
         }
 
         /// <summary>
@@ -243,29 +198,25 @@ namespace Live2D.Cubism.Editor.Inspectors
             EditorUtility.SetDirty(tracker);
         }
 
+        #endregion
+
+        #region UI Setup
+
         private void ToggleEditMode()
         {
             _isEditing = !_isEditing;
-            ResetEditorState();
             UpdateEditButtonState();
+
+            // Update edit instructions visibility
+            UpdateEditInstructionsVisibility();
+
+            // If exiting edit mode, reset the editor state
+            if (!_isEditing)
+            {
+                ResetEditorState();
+            }
+
             SceneView.RepaintAll();
-        }
-
-        private void UpdateEditButtonState()
-        {
-            if (_editButton == null)
-                return;
-
-            _editButton.text = _isEditing ? "Done Editing" : "Edit Points";
-
-            if (_isEditing)
-            {
-                _editButton.AddToClassList("editing");
-            }
-            else
-            {
-                _editButton.RemoveFromClassList("editing");
-            }
         }
 
         private void ResetEditorState()
@@ -273,32 +224,8 @@ namespace Live2D.Cubism.Editor.Inspectors
             if (_isEditing)
                 return;
 
-            _selectedPointIndex = -1;
-            _isDragging = false;
-        }
-
-        private static GUIStyle CreateLabelStyle()
-        {
-            var style = new GUIStyle(EditorStyles.miniLabel)
-            {
-                normal = { textColor = Color.white },
-                fontSize = 12,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                padding = new RectOffset(5, 5, 2, 2)
-            };
-
-            style.normal.background = CreateLabelBackground();
-
-            return style;
-        }
-
-        private static Texture2D CreateLabelBackground()
-        {
-            Texture2D backgroundTexture = new Texture2D(1, 1);
-            backgroundTexture.SetPixel(0, 0, k_LabelBackgroundColor);
-            backgroundTexture.Apply();
-            return backgroundTexture;
+            // These references will need to call methods in the Points.cs file
+            ResetPointsEditorState();
         }
 
         private void ShowIncludeDrawablesDialog()

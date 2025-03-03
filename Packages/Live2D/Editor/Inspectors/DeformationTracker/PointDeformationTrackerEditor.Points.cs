@@ -8,6 +8,33 @@ namespace Live2D.Cubism.Editor.Inspectors
 {
     public sealed partial class PointDeformationTrackerEditor
     {
+        // Default radius value
+        private const float DEFAULT_HANDLE_RADIUS = 0.1f;
+
+        #region Point Editor State
+
+        private bool _isDeleteMode;
+        private int _selectedPointIndex = -1;
+        private bool _isDragging;
+        private Vector3 _dragStartPosition;
+        private Vector3 _draggingPoint;
+        private bool _isAxisConstrained;
+        private Vector3 _constraintOrigin;
+        private bool _isAxisConstraintKeyPressed;
+        private bool _isGuidelineKeyPressed;
+
+        /// <summary>
+        /// Resets the point editor state variables.
+        /// Called from the main editor when resetting state.
+        /// </summary>
+        private void ResetPointsEditorState()
+        {
+            _selectedPointIndex = -1;
+            _isDragging = false;
+        }
+
+        #endregion
+
         #region Unity Methods
 
         /// <summary>
@@ -15,7 +42,7 @@ namespace Live2D.Cubism.Editor.Inspectors
         /// </summary>
         private void OnSceneGUI()
         {
-            if (!IsExpanded)
+            if (!IsExpanded || !Tracker.enabled)
                 return;
 
             var sceneView = SceneView.currentDrawingSceneView;
@@ -87,12 +114,12 @@ namespace Live2D.Cubism.Editor.Inspectors
 
             var newTrackedPoint = new PointDeformationTracker.TrackedPoint
             {
-                radius = DEFAULT_RADIUS
+                radius = DEFAULT_HANDLE_RADIUS
             };
 
             newTrackedPoint.vertexReferences = FindVerticesInRadius(
                 point2D,
-                DEFAULT_RADIUS,
+                DEFAULT_HANDLE_RADIUS,
                 Tracker.includedDrawables
             );
 
@@ -115,6 +142,10 @@ namespace Live2D.Cubism.Editor.Inspectors
             using (new Handles.DrawingScope(tracker.transform.localToWorldMatrix))
             {
                 bool anyPointHovered = false;
+
+                // Skip drawing if the tracker is disabled and not in edit mode
+                if (!tracker.enabled && !_isEditing)
+                    return;
 
                 for (int i = 0; i < tracker.trackedPoints.Length; i++)
                 {
@@ -472,20 +503,7 @@ namespace Live2D.Cubism.Editor.Inspectors
             }
 
             Handles.color = GetPointColor(index);
-
-            if (!isTrackerEnabled && !isEditing)
-            {
-                DrawSimplePoint(position);
-            }
-            else
-            {
-                DrawFullHandle(position);
-            }
-
-            if (Event.current.alt)
-            {
-                DrawIndexLabel(position, index);
-            }
+            DrawFullHandle(position);
         }
 
         /// <summary>
@@ -531,16 +549,6 @@ namespace Live2D.Cubism.Editor.Inspectors
         }
 
         /// <summary>
-        /// Draws a simple point representation.
-        /// </summary>
-        /// <param name="position">Position to draw at.</param>
-        private void DrawSimplePoint(Vector3 position)
-        {
-            float smallPointSize = Style.HANDLE_SIZE * Style.SMALL_POINT_SIZE_MULTIPLIER;
-            Handles.DrawSolidDisc(position, Vector3.forward, smallPointSize);
-        }
-
-        /// <summary>
         /// Draws a full handle representation for a point.
         /// </summary>
         /// <param name="position">Position to draw at.</param>
@@ -560,17 +568,6 @@ namespace Live2D.Cubism.Editor.Inspectors
                 position + new Vector3(crossSize, -crossSize, 0),
                 Style.HANDLE_LINE_WIDTH
             );
-        }
-
-        /// <summary>
-        /// Draws an index label near a point.
-        /// </summary>
-        /// <param name="position">Position of the point.</param>
-        /// <param name="index">Index to display.</param>
-        private void DrawIndexLabel(Vector3 position, int index)
-        {
-            Vector3 labelPosition = position + Vector3.up * Style.HANDLE_SIZE * Style.LABEL_POSITION_OFFSET_MULTIPLIER;
-            Handles.Label(labelPosition, index.ToString(), LabelStyle);
         }
 
         #endregion

@@ -1,56 +1,59 @@
-.unity-button {
-    margin: 5px;
-    padding: 8px;
-    border-radius: 4px;
-    border-width: 1px;
-    border-color: rgba(0, 0, 0, 0.2);
-    -unity-font-style: bold;
-    color: white;
-    transition: all 0.2s;
+/* PointDeformationTrackerEditor styles */
+
+/* Script container */
+#script-container {
+    margin-bottom: 8px;
 }
 
-.unity-button:hover {
-    opacity: 0.9;
-    scale: 1.02;
+/* Action buttons */
+.action-buttons {
+    flex-direction: row;
+    margin: 6px 3px 12px 3px;
 }
 
-.unity-button:active {
-    opacity: 0.8;
-    scale: 0.98;
+.action-buttons Button {
+    flex: 1;
+    margin-right: 4px;
+    min-height: 24px;
 }
 
-.edit-button {
-    margin: 2px 0;
-    padding: 4px 8px;
-    border-radius: 3px;
-    border-width: 1px;
-    border-color: var(--unity-colors-default-border);
-    background-color: var(--unity-colors-button-background);
-    color: var(--unity-colors-button-text);
-    font-size: 11px;
-    -unity-font-style: normal;
-    transition: all 0.1s;
+/* Add a class that can be assigned to the last button */
+.no-right-margin {
+    margin-right: 0;
 }
 
-.edit-button:hover {
-    background-color: var(--unity-colors-button-background-hover);
-}
-
-.edit-button.editing {
+/* Button in edit mode */
+.editing {
     background-color: rgb(204, 85, 85);
-    border-color: rgb(180, 75, 75);
     color: white;
 }
 
-.edit-button.editing:hover {
-    background-color: rgb(224, 95, 95);
+/* Statistics */
+#stats-container {
+    margin: 8px 3px;
 }
 
-.help-text {
-    padding: 8px;
+#stats-text {
+    -unity-font-style: bold;
     font-size: 11px;
-    color: var(--unity-colors-default-text);
-    -unity-font-style: italic;
+}
+
+/* Edit Instructions */
+#edit-instructions-container {
+    margin-top: 8px;
+}
+
+.instruction-item {
+    flex-direction: row;
+    padding: 2px 0;
+}
+
+.bullet-point {
+    min-width: 15px;
+}
+
+.instruction-text {
     white-space: normal;
-    margin-top: 4px;
+    flex-grow: 1;
+    flex-shrink: 1;
 } 
