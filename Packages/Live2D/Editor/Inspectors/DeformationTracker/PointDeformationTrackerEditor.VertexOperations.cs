@@ -3,442 +3,617 @@ using UnityEngine;
 using Live2D.Cubism.Core;
 using System.Linq;
 using Live2D.Cubism.Framework.Utils;
-
 using VertexReference = Live2D.Cubism.Framework.PointDeformationTracker.VertexReference;
+using Live2D.Cubism.Framework;
 
 namespace Live2D.Cubism.Editor.Inspectors
 {
     public sealed partial class PointDeformationTrackerEditor
     {
         /// <summary>
-        /// Finds vertices for tracking, prioritizing those within radius but including outside vertices if needed.
+        /// Contains all constants used in vertex operations.
         /// </summary>
-        /// <remarks>
-        /// The algorithm follows these steps:
-        /// 1. Collect all vertices from drawables, marking their distances from the position
-        /// 2. Select an optimal subset of vertices for performance
-        /// 3. Calculate weights for vertices to ensure their weighted average equals the target position
-        ///
-        /// Vertices outside the radius can still be selected when not enough good vertices are available within radius.
-        /// </remarks>
+        private static class Constants
+        {
+            /// <summary>
+            /// Maximum number of vertices to include in deformation calculations.
+            /// </summary>
+            public const int MAX_TOTAL_VERTICES = PointDeformationTracker.MAX_TOTAL_VERTICES;
+
+            #region Gradient Descent Parameters
+
+            /// <summary>
+            /// Starting learning rate for gradient descent optimization.
+            /// </summary>
+            public const float INITIAL_LEARNING_RATE = 0.5f;
+
+            /// <summary>
+            /// Factor by which learning rate decays over time.
+            /// </summary>
+            public const float LEARNING_RATE_DECAY_FACTOR = 0.7f;
+
+            /// <summary>
+            /// Factor to reduce learning rate when overshooting occurs.
+            /// </summary>
+            public const float LEARNING_RATE_OVERSHOOT_DECAY = 0.5f;
+
+            /// <summary>
+            /// Minimum learning rate to prevent optimization from stalling.
+            /// </summary>
+            public const float MIN_LEARNING_RATE = 0.01f;
+
+            /// <summary>
+            /// Minimum distance considered significant during optimization.
+            /// </summary>
+            public const float DISTANCE_TOLERANCE = 0.00001f;
+
+            /// <summary>
+            /// Squared distance tolerance used as error threshold.
+            /// </summary>
+            public const float ERROR_TOLERANCE = DISTANCE_TOLERANCE * DISTANCE_TOLERANCE;
+
+            /// <summary>
+            /// Factor used to bias weights toward initial values.
+            /// </summary>
+            public const float BIAS_FACTOR = 0.9f;
+
+            /// <summary>
+            /// Threshold below which gradient is considered insignificant.
+            /// </summary>
+            public const float MIN_GRADIENT_THRESHOLD = 0.00001f;
+
+            /// <summary>
+            /// Maximum amount of blend influence toward best solution.
+            /// </summary>
+            public const float MAX_BLEND_INFLUENCE = 0.3f;
+
+            /// <summary>
+            /// Progress threshold at which blending begins.
+            /// </summary>
+            public const float BLEND_START_THRESHOLD = 0.5f;
+
+            /// <summary>
+            /// Maximum computation time in milliseconds to prevent excessive processing.
+            /// </summary>
+            public const int MAX_COMPUTE_TIME_MS = 250;
+
+            #endregion
+
+            #region Weight Bias Parameters
+
+            /// <summary>
+            /// Minimum initial weight to consider for bias adjustment.
+            /// </summary>
+            public const float SIGNIFICANT_WEIGHT_THRESHOLD = 0.001f;
+
+            /// <summary>
+            /// Safety value to prevent division by zero in weight calculations.
+            /// </summary>
+            public const float EPSILON = 0.001f;
+
+            /// <summary>
+            /// Target ratio between initial and current weights.
+            /// </summary>
+            public const float REFERENCE_RATIO = 1.0f;
+
+            /// <summary>
+            /// Maximum allowed bias modification to prevent excessive correction.
+            /// </summary>
+            public const float MAX_BIAS_EFFECT = 0.5f;
+
+            #endregion
+
+            #region Vertex Collection Parameters
+
+            /// <summary>
+            /// Maximum vertices to collect per drawable.
+            /// </summary>
+            public const int MAX_VERTICES_PER_DRAWABLE = 3;
+
+            /// <summary>
+            /// Minimum distance threshold between vertices to be considered separate.
+            /// </summary>
+            public const float MIN_DISTANCE_THRESHOLD = 0.001f;
+
+            /// <summary>
+            /// Multiplier used to determine when to ignore vertices based on distance.
+            /// </summary>
+            public const float IGNORE_DISTANCE_MULTIPLIER = 2;
+
+            #endregion
+
+            #region Weight Calculation Parameters
+
+            /// <summary>
+            /// Minimum distance value to prevent division by zero.
+            /// </summary>
+            public const float MIN_DISTANCE = 0.000001f;
+
+            /// <summary>
+            /// Factor controlling the decay rate of weight with distance.
+            /// </summary>
+            public const float DECAY_FACTOR = 1.5f;
+
+            #endregion
+        }
+
+        /// <summary>
+        /// Represents a candidate vertex with its distance from a point.
+        /// </summary>
+        private struct VertexCandidate
+        {
+            public int DrawableIndex;
+            public int VertexIndex;
+            public float Distance;
+
+            public VertexCandidate(int drawableIndex, int vertexIndex, float distance)
+            {
+                DrawableIndex = drawableIndex;
+                VertexIndex = vertexIndex;
+                Distance = distance;
+            }
+        }
+
+        /// <summary>
+        /// Stores data for weight annealing process.
+        /// </summary>
+        private struct WeightAnnealingData
+        {
+            public Vector2 vertex;
+            public float initialWeight;
+        }
+
+        /// <summary>
+        /// Finds vertices within a specified radius from a position.
+        /// </summary>
+        /// <param name="position">The center position to search from.</param>
+        /// <param name="radius">The radius within which to find vertices.</param>
+        /// <param name="includedDrawables">Drawables to search for vertices.</param>
+        /// <returns>Array of vertex references within the radius.</returns>
         private static VertexReference[] FindVerticesInRadius(
             Vector2 position,
             float radius,
             ReadOnlySpan<CubismDrawable> includedDrawables)
         {
-            // Skip processing if there are no included drawables
             if (includedDrawables.IsEmpty)
                 return new VertexReference[0];
 
-            const int MAX_TOTAL_VERTICES = 9;        // Maximum total vertices to use
-            var vertexReferences = new VertexReference[MAX_TOTAL_VERTICES];
+            var vertexReferences = new VertexReference[Constants.MAX_TOTAL_VERTICES];
 
-            // Use the combined function that handles both collection and selection
             int vertexesFound = CollectAndSelectVertices(vertexReferences, position, radius, includedDrawables);
-            if (vertexesFound < MAX_TOTAL_VERTICES)
+            if (vertexesFound < Constants.MAX_TOTAL_VERTICES)
                 Array.Resize(ref vertexReferences, vertexesFound);
 
-            // Calculate optimal weights for the selected vertices (modifies selectedVertices in-place)
             CalculateVertexWeights(position, vertexReferences, includedDrawables);
 
             return vertexReferences;
         }
 
         /// <summary>
-        /// Calculates the final vertex weights for the selected vertices and updates them in-place.
+        /// Calculates weights for vertices based on their position relative to a target point.
         /// </summary>
+        /// <param name="position">The target position.</param>
+        /// <param name="vertexReferences">The vertex references to calculate weights for.</param>
+        /// <param name="includedDrawables">The drawables containing the vertices.</param>
         private static void CalculateVertexWeights(
             Vector2 position,
             Span<VertexReference> vertexReferences,
             ReadOnlySpan<CubismDrawable> includedDrawables)
         {
-            // Special case: Single vertex
             if (vertexReferences.Length == 1)
             {
                 vertexReferences[0].weight = 1.0f;
                 return;
             }
 
-            // Collect vertex positions and initial weights
-            Span<Vector2> vertexPositions = stackalloc Vector2[vertexReferences.Length];
-            Span<float> initialWeights = stackalloc float[vertexReferences.Length];
+            Span<WeightAnnealingData> weightAnnealingData = stackalloc WeightAnnealingData[vertexReferences.Length];
+            Span<float> weights = stackalloc float[vertexReferences.Length];
 
             for (int i = 0; i < vertexReferences.Length; i++)
             {
                 var drawable = includedDrawables[vertexReferences[i].drawableIndex];
-                vertexPositions[i] = drawable.VertexPositions[vertexReferences[i].vertexIndex];
-                initialWeights[i] = vertexReferences[i].weight;
+                weightAnnealingData[i] = new WeightAnnealingData
+                {
+                    vertex = drawable.VertexPositions[vertexReferences[i].vertexIndex],
+                    initialWeight = vertexReferences[i].weight
+                };
             }
 
-            // Calculate optimal weights biased by initial weights
-            float[] weights = CalculateOptimalWeights(vertexPositions, position, initialWeights);
+            CalculateOptimalWeights(weights, position, weightAnnealingData);
 
-            // Apply weights to result (in-place)
             for (int i = 0; i < vertexReferences.Length; i++)
-            {
-                var vRef = vertexReferences[i];
-                vRef.weight = weights[i];
-                vertexReferences[i] = vRef;
-            }
+                vertexReferences[i].weight = weights[i];
         }
 
         /// <summary>
-        /// Calculates weights based on inverse distances and applies iterative refinement
-        /// to ensure the weighted average equals the target position.
+        /// Calculates optimal vertex weights for a target position.
         /// </summary>
-        private static float[] CalculateOptimalWeights(ReadOnlySpan<Vector2> vertices, Vector2 targetPosition, ReadOnlySpan<float> initialWeights)
+        /// <param name="weights">Output buffer for the calculated weights.</param>
+        /// <param name="targetPosition">The target position to reach.</param>
+        /// <param name="weightAnnealingData">Data for weight annealing process.</param>
+        private static void CalculateOptimalWeights(Span<float> weights, Vector2 targetPosition, ReadOnlySpan<WeightAnnealingData> weightAnnealingData)
         {
-            // Initialize weights based on initial weights and inverse distance
-            float[] weights = InitializeDistanceBasedWeights(vertices, targetPosition, initialWeights);
-
-            // Apply iterative refinement to adjust weights, biased by initial weights
-            RefineWeightsWithGradientDescent(vertices, targetPosition, weights, initialWeights);
-
-            return weights;
+            InitializeDistanceBasedWeights(weights, weightAnnealingData, targetPosition);
+            RefineWeightsWithGradientDescent(weights, targetPosition, weightAnnealingData);
         }
 
         /// <summary>
-        /// Initializes weights based on a combination of initial weights and inverse distance.
+        /// Initializes weights based on distance from vertices to target position.
         /// </summary>
-        private static float[] InitializeDistanceBasedWeights(ReadOnlySpan<Vector2> vertices, Vector2 targetPosition, ReadOnlySpan<float> initialWeights)
+        /// <param name="weights">Output buffer for the calculated weights.</param>
+        /// <param name="weightAnnealingData">Data containing vertex positions and initial weights.</param>
+        /// <param name="targetPosition">The target position.</param>
+        private static void InitializeDistanceBasedWeights(Span<float> weights, ReadOnlySpan<WeightAnnealingData> weightAnnealingData, Vector2 targetPosition)
         {
-            int n = vertices.Length;
-            float[] weights = new float[n];
-
-            // Calculate combined weights (initial weight * inverse distance)
             float totalWeight = 0;
-            for (int i = 0; i < n; i++)
+            for (int i = 0; i < weights.Length; i++)
             {
-                float dist = Vector2.Distance(targetPosition, vertices[i]);
-                dist = Mathf.Max(dist, 0.001f); // Avoid division by zero
+                float dist = Vector2.Distance(targetPosition, weightAnnealingData[i].vertex);
+                dist = Mathf.Max(dist, 0.001f);
 
-                // Combine initial weight with inverse distance
-                weights[i] = initialWeights[i] * (1.0f / dist);
+                weights[i] = weightAnnealingData[i].initialWeight * (1.0f / dist);
                 totalWeight += weights[i];
             }
 
-            // Normalize weights
-            if (totalWeight > 0)
+            for (int i = 0; i < weights.Length; i++)
             {
-                for (int i = 0; i < n; i++)
-                {
-                    weights[i] /= totalWeight;
-                }
+                weights[i] /= totalWeight;
             }
-            else
-            {
-                // Fallback to normalized initial weights
-                totalWeight = 0;
-                for (int i = 0; i < n; i++)
-                {
-                    totalWeight += initialWeights[i];
-                }
-
-                if (totalWeight > 0)
-                {
-                    for (int i = 0; i < n; i++)
-                    {
-                        weights[i] = initialWeights[i] / totalWeight;
-                    }
-                }
-                else
-                {
-                    // Last resort: equal weights
-                    for (int i = 0; i < n; i++)
-                    {
-                        weights[i] = 1.0f / n;
-                    }
-                }
-            }
-
-            return weights;
         }
 
         /// <summary>
-        /// Refines weights using gradient descent to minimize the error between weighted average
-        /// and target position, while respecting initial weight distribution.
+        /// Refines vertex weights using gradient descent to optimize the weighted position towards a target position.
         /// </summary>
+        /// <param name="weights">The weights to optimize.</param>
+        /// <param name="targetPosition">The target position to reach.</param>
+        /// <param name="weightAnnealingData">Data containing vertex positions and initial weights.</param>
         private static void RefineWeightsWithGradientDescent(
-            ReadOnlySpan<Vector2> vertices,
+            Span<float> weights,
             Vector2 targetPosition,
-            float[] weights,
-            ReadOnlySpan<float> initialWeights)
+            ReadOnlySpan<WeightAnnealingData> weightAnnealingData)
         {
-            const int MAX_COMPUTE_TIME_MS = 250;
-            const float INITIAL_LEARNING_RATE = 0.5f;
-            const float MIN_LEARNING_RATE = 0.01f;
-            const float TOLERANCE = 0.00000001f;
-            const float BIAS_FACTOR = 0.9f; // How much to bias towards initial weights (0-1)
-
-            // Precompute vertex-to-target vectors for gradient calculation
-            Vector2[] vertexToTarget = new Vector2[vertices.Length];
-            for (int i = 0; i < vertices.Length; i++)
-            {
-                vertexToTarget[i] = vertices[i] - targetPosition;
-            }
-
-            // Keep track of best weights found so far
-            float[] bestWeights = new float[weights.Length];
-            Array.Copy(weights, bestWeights, weights.Length);
+            Span<float> bestWeights = stackalloc float[weights.Length];
+            Span<float> gradients = stackalloc float[weights.Length];
             float bestError = float.MaxValue;
+            float previousErrorMagnitude = float.NegativeInfinity;
 
-            // Initial error calculation
-            Vector2 initialPos = Vector2.zero;
-            for (int i = 0; i < weights.Length; i++)
-            {
-                initialPos += vertices[i] * weights[i];
-            }
-            float previousErrorMagnitude = (targetPosition - initialPos).sqrMagnitude;
-
-            // Start timer for maximum compute time limit
-            System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
+            weights.CopyTo(bestWeights);
+            var stopwatch = new System.Diagnostics.Stopwatch();
             stopwatch.Start();
 
-            while (stopwatch.ElapsedMilliseconds < MAX_COMPUTE_TIME_MS)
+            do
             {
-                // Calculate current weighted position
-                Vector2 currentPos = Vector2.zero;
-                for (int i = 0; i < weights.Length; i++)
-                {
-                    currentPos += vertices[i] * weights[i];
-                }
+                // Calculate current position
+                var currentPos = CalculateWeightedPosition(weights, weightAnnealingData);
 
-                // Current error vector
-                Vector2 error = targetPosition - currentPos;
+                // Calculate error and update best solution if needed
+                var error = targetPosition - currentPos;
                 float errorMagnitude = error.sqrMagnitude;
 
-                // Save best weights if this is the best result so far
-                if (errorMagnitude < bestError)
-                {
-                    bestError = errorMagnitude;
-                    Array.Copy(weights, bestWeights, weights.Length);
-                }
+                UpdateBestSolution(weights, bestWeights, errorMagnitude);
 
-                // Check if we're close enough
-                if (errorMagnitude < TOLERANCE)
+                if (errorMagnitude < Constants.ERROR_TOLERANCE)
                     break;
 
-                // Adaptive learning rate - reduce if error is not decreasing
-                float learningRate = INITIAL_LEARNING_RATE;
-                if (errorMagnitude > previousErrorMagnitude)
-                {
-                    // Error increased, reduce learning rate
-                    learningRate = Mathf.Max(MIN_LEARNING_RATE, learningRate * 0.5f);
-                }
-                previousErrorMagnitude = errorMagnitude;
+                // Adjust learning rate
+                float timeProgress = (float)stopwatch.ElapsedMilliseconds / Constants.MAX_COMPUTE_TIME_MS;
+                float learningRate = CalculateLearningRate(errorMagnitude, timeProgress);
 
-                // Calculate time progress (0 at start, approaching 1 at end of compute time)
-                float timeProgress = (float)stopwatch.ElapsedMilliseconds / MAX_COMPUTE_TIME_MS;
+                // Calculate and apply gradients
+                if (!CalculateAndApplyGradients(weights, gradients, bestWeights, weightAnnealingData,
+                                               currentPos, error, learningRate, timeProgress))
+                    break;
 
-                // Decay learning rate over time for better convergence
-                learningRate *= (1.0f - 0.7f * timeProgress);
+                // Enforce constraints
+                NormalizeWeights(weights);
 
+            } while (stopwatch.ElapsedMilliseconds < Constants.MAX_COMPUTE_TIME_MS);
+
+            // Use the best solution found
+            bestWeights.CopyTo(weights);
+
+            // Nested function to calculate the weighted position
+            static Vector2 CalculateWeightedPosition(
+                ReadOnlySpan<float> currentWeights,
+                ReadOnlySpan<WeightAnnealingData> data)
+            {
+                var position = Vector2.zero;
+                for (int i = 0; i < currentWeights.Length; i++)
+                    position += data[i].vertex * currentWeights[i];
+                return position;
+            }
+
+            // Nested function to update the best solution
+            void UpdateBestSolution(
+                ReadOnlySpan<float> currentWeights,
+                Span<float> bestWeightsSoFar,
+                float currentError)
+            {
+                if (currentError > bestError)
+                    return;
+
+                bestError = currentError;
+                currentWeights.CopyTo(bestWeightsSoFar);
+            }
+
+            // Nested function to calculate the learning rate
+            float CalculateLearningRate(
+                float currentError,
+                float progress)
+            {
+                float rate = Constants.INITIAL_LEARNING_RATE;
+
+                // Reduce learning rate if error increased
+                if (currentError > previousErrorMagnitude)
+                    rate = Mathf.Max(Constants.MIN_LEARNING_RATE, rate * Constants.LEARNING_RATE_OVERSHOOT_DECAY);
+
+                previousErrorMagnitude = currentError;
+
+                // Gradually reduce learning rate as time passes
+                rate *= 1.0f - Constants.LEARNING_RATE_DECAY_FACTOR * progress;
+
+                return rate;
+            }
+
+            // Nested function to calculate and apply gradients
+            static bool CalculateAndApplyGradients(
+                Span<float> weights,
+                Span<float> gradients,
+                ReadOnlySpan<float> bestWeights,
+                ReadOnlySpan<WeightAnnealingData> weightData,
+                Vector2 currentPos,
+                Vector2 error,
+                float learningRate,
+                float timeProgress)
+            {
                 // Calculate gradients for each weight
-                float[] gradients = new float[weights.Length];
+                float totalGradient = CalculateGradients(gradients, weights, weightData, currentPos, error);
+
+                // Early termination if gradients are too small
+                if (totalGradient < Constants.MIN_GRADIENT_THRESHOLD)
+                    return false;
+
+                // Normalize gradients for stable updates
+                NormalizeGradients(gradients, totalGradient);
+
+                // Update weights based on gradients and learning rate
+                ApplyGradients(weights, gradients, learningRate);
+
+                // In later stages, blend toward best solution found so far
+                if (timeProgress > Constants.BLEND_START_THRESHOLD)
+                    BlendWithBestSolution(weights, bestWeights, timeProgress);
+
+                return true;
+            }
+
+            // Calculate gradients for each weight
+            static float CalculateGradients(
+                Span<float> gradients,
+                ReadOnlySpan<float> weights,
+                ReadOnlySpan<WeightAnnealingData> weightData,
+                Vector2 currentPos,
+                Vector2 error)
+            {
                 float totalGradient = 0;
 
                 for (int i = 0; i < weights.Length; i++)
                 {
-                    // Project error onto the vector from current position to this vertex
-                    Vector2 currentToVertex = vertices[i] - currentPos;
+                    // Projection of error onto vector from current position to this vertex
+                    var currentToVertex = weightData[i].vertex - currentPos;
                     float errorProjection = Vector2.Dot(error, currentToVertex);
-
-                    // Basic gradient calculation
                     gradients[i] = errorProjection;
 
-                    // Apply bias toward initial weights (more gently)
-                    if (initialWeights[i] > 0.001f)
-                    {
-                        float desiredRatio = initialWeights[i] / (weights[i] + 0.001f);
-                        float biasTerm = BIAS_FACTOR * Mathf.Sign(desiredRatio - 1.0f) *
-                                         Mathf.Min(0.5f, Mathf.Abs(desiredRatio - 1.0f));
-                        gradients[i] *= (1.0f + biasTerm);
-                    }
+                    // Apply bias toward initial weights if they were significant
+                    ApplyInitialWeightBias(gradients, weights, weightData, i);
 
                     totalGradient += Mathf.Abs(gradients[i]);
                 }
 
-                // Skip if no significant gradient
-                if (totalGradient < 0.00001f)
-                    break;
+                return totalGradient;
+            }
 
-                // Normalize gradients for consistent step size, but more gently
+            // Apply bias toward initial weights to preserve original vertex influence
+            static void ApplyInitialWeightBias(
+                Span<float> gradients,
+                ReadOnlySpan<float> weights,
+                ReadOnlySpan<WeightAnnealingData> weightData,
+                int index)
+            {
+                // Only apply bias for vertices that had significant influence initially
+                if (weightData[index].initialWeight <= Constants.SIGNIFICANT_WEIGHT_THRESHOLD)
+                    return;
+
+                // Calculate ratio between initial weight and current weight
+                // Values > 1 mean the vertex has lost influence, values < 1 mean it gained influence
+                float desiredRatio = weightData[index].initialWeight / (weights[index] + Constants.EPSILON);
+
+                // Calculate bias term:
+                // - Sign determines direction (increase or decrease gradient)
+                // - Magnitude is capped to prevent excessive correction
+                float ratioDeviation = desiredRatio - Constants.REFERENCE_RATIO;
+                float biasNudgeMagnitude = Mathf.Min(Constants.MAX_BIAS_EFFECT, Mathf.Abs(ratioDeviation));
+                float biasTerm = Constants.BIAS_FACTOR * Mathf.Sign(ratioDeviation) * biasNudgeMagnitude;
+
+                // Adjust gradient to bias toward the initial weight
+                gradients[index] *= 1.0f + biasTerm;
+            }
+
+            // Normalize gradients
+            static void NormalizeGradients(Span<float> gradients, float totalGradient)
+            {
+                totalGradient += Constants.EPSILON;
                 for (int i = 0; i < gradients.Length; i++)
-                {
-                    gradients[i] /= (totalGradient + 0.001f);
-                }
+                    gradients[i] /= totalGradient;
+            }
 
-                // Apply scaled gradients to weights
+            // Apply gradients to weights
+            static void ApplyGradients(Span<float> weights, ReadOnlySpan<float> gradients, float learningRate)
+            {
                 for (int i = 0; i < weights.Length; i++)
-                {
                     weights[i] += gradients[i] * learningRate;
-                }
+            }
 
-                // Apply small amount of smoothing with previous weights
-                // Use time-based smoothing factor instead of iteration-based
-                if (timeProgress > 0.5f)
-                {
-                    for (int i = 0; i < weights.Length; i++)
-                    {
-                        // Gradually increase smoothing as time progresses
-                        float smoothFactor = 0.3f * (timeProgress - 0.5f) / 0.5f;
-                        weights[i] = weights[i] * (1 - smoothFactor) + bestWeights[i] * smoothFactor;
-                    }
-                }
-
-                // Ensure weights stay non-negative
+            // Blend with best solution
+            static void BlendWithBestSolution(Span<float> weights, ReadOnlySpan<float> bestWeights, float timeProgress)
+            {
+                float smoothFactor = Constants.MAX_BLEND_INFLUENCE * (timeProgress - Constants.BLEND_START_THRESHOLD) / Constants.BLEND_START_THRESHOLD;
                 for (int i = 0; i < weights.Length; i++)
-                {
-                    weights[i] = Mathf.Max(0, weights[i]);
-                }
+                    weights[i] = Mathf.LerpUnclamped(weights[i], bestWeights[i], smoothFactor);
+            }
 
-                // Re-normalize weights to sum to 1
+            // Enforce non-negative weights and normalize (improves stability)
+            static void NormalizeWeights(Span<float> weights)
+            {
+                // Enforce non-negative weights
+                for (int i = 0; i < weights.Length; i++)
+                    weights[i] = Mathf.Max(0, weights[i]);
+
+                // Normalize weights to sum to 1
                 float totalWeight = 0;
                 for (int i = 0; i < weights.Length; i++)
                 {
                     totalWeight += weights[i];
                 }
 
-                if (totalWeight > 0)
+                if (totalWeight <= 0)
+                    return;
+
+                for (int i = 0; i < weights.Length; i++)
                 {
-                    for (int i = 0; i < weights.Length; i++)
-                    {
-                        weights[i] /= totalWeight;
-                    }
+                    weights[i] /= totalWeight;
                 }
             }
-
-            // Use the best weights found during optimization
-            Array.Copy(bestWeights, weights, weights.Length);
         }
 
+        /// <summary>
+        /// Collects and selects vertices near a position.
+        /// </summary>
+        /// <param name="resultBuffer">Buffer to store the resulting vertex references.</param>
+        /// <param name="position">The position to search near.</param>
+        /// <param name="radius">The radius within which to find vertices.</param>
+        /// <param name="includedDrawables">The drawables to search.</param>
+        /// <returns>Number of vertices collected.</returns>
         private static int CollectAndSelectVertices(
             Span<VertexReference> resultBuffer,
             Vector2 position,
             float radius,
             ReadOnlySpan<CubismDrawable> includedDrawables)
         {
-            const int MaxVerticesPerDrawable = 3; // Limit vertices per drawable for performance
-            const float MinDistanceThreshold = 0.001f; // Minimum distance between vertices
+            int maxPossibleVertices = Constants.MAX_VERTICES_PER_DRAWABLE * includedDrawables.Length;
 
-            // Pre-allocate buffer for all potential vertices (MaxVerticesPerDrawable per drawable)
-            int maxPossibleVertices = MaxVerticesPerDrawable * includedDrawables.Length;
-            Span<(int drawableIndex, int vertexIndex, float distance)> candidateVertices =
-                stackalloc (int, int, float)[maxPossibleVertices];
+            Span<VertexCandidate> candidateVertices = stackalloc VertexCandidate[maxPossibleVertices];
 
-            int totalCandidates = CollectNearestVertices(
-                position,
-                includedDrawables,
-                candidateVertices,
-                MaxVerticesPerDrawable,
-                MinDistanceThreshold);
+            CollectNearestVertices(position, includedDrawables, candidateVertices);
 
-            // Sort candidates by distance and copy to result buffer
             return CopyToResultBuffer(
-                candidateVertices.Slice(0, totalCandidates),
+                candidateVertices,
                 resultBuffer,
                 position,
                 radius);
 
-            // Nested function: Collects the nearest vertices from each drawable with spatial diversity check
-            int CollectNearestVertices(
+            void CollectNearestVertices(
                 Vector2 pos,
                 ReadOnlySpan<CubismDrawable> drawables,
-                Span<(int drawableIndex, int vertexIndex, float distance)> candidateBuffer,
-                int maxVerticesPerDrawable,
-                float minDistanceThreshold)
+                Span<VertexCandidate> candidateBuffer)
             {
                 int totalVerticesFilled = 0;
+                var targetTotalVertices = candidateBuffer.Length;
 
                 for (int drawableIndex = 0; drawableIndex < drawables.Length; drawableIndex++)
                 {
+                    // Exit early if buffer is already full
+                    if (totalVerticesFilled >= targetTotalVertices)
+                        break;
+
                     var drawable = drawables[drawableIndex];
                     var vertices = drawable.VertexPositions;
 
-                    if (vertices.Length == 0)
-                        continue;
+                    // Calculate remaining vertices needed and available drawables
+                    var remainingVerticesNeeded = targetTotalVertices - totalVerticesFilled;
+                    var remainingDrawables = drawables.Length - drawableIndex;
 
-                    // Get a slice for this drawable's vertices in the candidate buffer
-                    var drawableVerticesSlice = candidateBuffer.Slice(totalVerticesFilled, maxVerticesPerDrawable);
-                    drawableVerticesSlice.Fill((-1, -1, float.MaxValue));
+                    // Determine if we need to relax constraints
+                    // If we're at risk of not filling the buffer, start relaxing constraints
+                    bool relaxConstraints = remainingVerticesNeeded >
+                        remainingDrawables * Constants.MAX_VERTICES_PER_DRAWABLE / 2;  // Conservative estimate
+
+                    // Calculate how many more vertices we can take from this drawable
+                    int remainingCapacity = Math.Min(
+                        Constants.MAX_VERTICES_PER_DRAWABLE,
+                        targetTotalVertices - totalVerticesFilled);
+
+                    var drawableVerticesSlice = candidateBuffer.Slice(totalVerticesFilled, remainingCapacity);
+                    drawableVerticesSlice.Fill(new VertexCandidate(-1, -1, float.MaxValue));
 
                     int filledCount = 0;
-                    float maxDistanceInSelection = float.MaxValue;
+                    var maxDistanceInSelection = float.MaxValue;
 
-                    // Process each vertex in this drawable
                     for (int vertexIndex = 0; vertexIndex < vertices.Length; vertexIndex++)
                     {
                         float distance = Vector2.Distance(pos, vertices[vertexIndex]);
 
-                        // Skip if buffer is full and this vertex is further than our furthest
-                        if (filledCount == maxVerticesPerDrawable && distance >= maxDistanceInSelection)
+                        if (filledCount == remainingCapacity && distance >= maxDistanceInSelection)
                             continue;
 
-                        // Skip if too close to an already selected vertex (spatial diversity check)
-                        if (filledCount > 0 && IsTooCloseToExistingVertex(
+                        // Skip the proximity check if we're relaxing constraints OR
+                        // if we haven't filled this drawable's allocation yet
+                        bool skipProximityCheck = relaxConstraints || filledCount < remainingCapacity / 2;
+
+                        if (!skipProximityCheck && filledCount > 0 && IsTooCloseToExistingVertex(
                             vertices,
                             vertexIndex,
                             drawableVerticesSlice,
                             filledCount,
                             distance,
-                            minDistanceThreshold))
+                            Constants.MIN_DISTANCE_THRESHOLD))
                             continue;
 
-                        // Insert vertex at correct position to maintain sorted order
-                        int insertIndex = FindInsertionIndex(drawableVerticesSlice, filledCount, distance);
+                        var insertIndex = FindInsertionIndex(drawableVerticesSlice, filledCount, distance);
 
-                        if (filledCount < maxVerticesPerDrawable)
+                        if (filledCount < remainingCapacity)
                         {
-                            // Shift elements if needed
                             if (insertIndex < filledCount)
                                 drawableVerticesSlice.RightShift(insertIndex, 1);
 
-                            drawableVerticesSlice[insertIndex] = (drawableIndex, vertexIndex, distance);
+                            drawableVerticesSlice[insertIndex] = new VertexCandidate(drawableIndex, vertexIndex, distance);
                             filledCount++;
 
-                            if (filledCount == maxVerticesPerDrawable)
-                                maxDistanceInSelection = drawableVerticesSlice[maxVerticesPerDrawable - 1].distance;
+                            if (filledCount == remainingCapacity)
+                                maxDistanceInSelection = drawableVerticesSlice[remainingCapacity - 1].Distance;
                         }
                         else
                         {
-                            // Buffer is full, but this vertex is closer than at least one entry
-                            if (insertIndex < maxVerticesPerDrawable - 1)
+                            if (insertIndex < remainingCapacity - 1)
                                 drawableVerticesSlice.RightShift(insertIndex, 1);
 
-                            drawableVerticesSlice[insertIndex] = (drawableIndex, vertexIndex, distance);
-                            maxDistanceInSelection = drawableVerticesSlice[maxVerticesPerDrawable - 1].distance;
+                            drawableVerticesSlice[insertIndex] = new VertexCandidate(drawableIndex, vertexIndex, distance);
+                            maxDistanceInSelection = drawableVerticesSlice[remainingCapacity - 1].Distance;
                         }
                     }
 
                     totalVerticesFilled += filledCount;
                 }
-
-                return totalVerticesFilled;
             }
 
-            // Nested function: Check if a vertex is too close to any already selected vertex
             bool IsTooCloseToExistingVertex(
                 ReadOnlySpan<Vector3> vertices,
                 int candidateIndex,
-                ReadOnlySpan<(int drawableIndex, int vertexIndex, float distance)> selectedVertices,
+                ReadOnlySpan<VertexCandidate> selectedVertices,
                 int selectedCount,
                 float candidateDistance,
                 float minDistanceThreshold)
             {
-                Vector2 candidatePosition = vertices[candidateIndex];
+                var candidatePosition = vertices[candidateIndex];
 
                 for (int i = 0; i < selectedCount; i++)
                 {
-                    // Skip invalid vertices
-                    if (selectedVertices[i].vertexIndex < 0)
+                    if (selectedVertices[i].VertexIndex < 0)
                         continue;
 
-                    // Optimization: Skip checking vertices that are much further away
-                    if (selectedVertices[i].distance > candidateDistance * 2)
+                    if (selectedVertices[i].Distance > candidateDistance * Constants.IGNORE_DISTANCE_MULTIPLIER)
                         continue;
 
-                    // Check spatial distance between vertices
-                    Vector2 existingPosition = vertices[selectedVertices[i].vertexIndex];
+                    var existingPosition = vertices[selectedVertices[i].VertexIndex];
                     if (Vector2.Distance(existingPosition, candidatePosition) < minDistanceThreshold)
                         return true;
                 }
@@ -446,53 +621,47 @@ namespace Live2D.Cubism.Editor.Inspectors
                 return false;
             }
 
-            // Nested function: Find the index where a vertex should be inserted to maintain sorted order
             int FindInsertionIndex(
-                ReadOnlySpan<(int drawableIndex, int vertexIndex, float distance)> vertices,
+                ReadOnlySpan<VertexCandidate> vertices,
                 int count,
                 float distance)
             {
                 int index = 0;
-                while (index < count && vertices[index].distance < distance)
+                while (index < count && vertices[index].Distance < distance)
                     index++;
 
                 return index;
             }
 
-            // Nested function: Copy sorted vertices to the result buffer with weights
             int CopyToResultBuffer(
-                Span<(int drawableIndex, int vertexIndex, float distance)> sortedVertices,
+                Span<VertexCandidate> candidateVertices,
                 Span<VertexReference> resultBuffer,
                 Vector2 pos,
                 float rad)
             {
-                // Sort by distance
-                var bestVertices = sortedVertices.OrderBy(v => v.distance);
-                int totalVerticesToCopy = Math.Min(resultBuffer.Length, bestVertices.Length);
+                var bestVertices = candidateVertices.OrderBy(v => v.Distance);
+                int targetCount = Math.Min(Constants.MAX_TOTAL_VERTICES, resultBuffer.Length);
+
+                // If we have fewer vertices than needed, we take them all
+                int totalVerticesToCopy = Math.Min(targetCount, bestVertices.Length);
 
                 for (int i = 0; i < totalVerticesToCopy; i++)
                 {
                     resultBuffer[i] = new VertexReference
                     {
-                        drawableIndex = bestVertices[i].drawableIndex,
-                        vertexIndex = bestVertices[i].vertexIndex,
-                        weight = CalculateVertexWeight(bestVertices[i].distance, rad)
+                        drawableIndex = bestVertices[i].DrawableIndex,
+                        vertexIndex = bestVertices[i].VertexIndex,
+                        weight = CalculateVertexWeight(bestVertices[i].Distance, rad)
                     };
                 }
 
                 return totalVerticesToCopy;
             }
 
-            // Nested function: Calculate weight for a vertex based on its distance from target position
             float CalculateVertexWeight(float distance, float rad)
             {
-                // Prevent division by zero and ensure minimum weight
-                const float minDistance = 0.0001f;
-                distance = Mathf.Max(distance, minDistance);
-
-                // Higher decay factor = sharper falloff from center point
-                const float decayFactor = 1.5f;
-                return Mathf.Exp(-decayFactor * distance / rad);
+                distance = Mathf.Max(distance, Constants.MIN_DISTANCE);
+                return Mathf.Exp(-Constants.DECAY_FACTOR * distance / rad);
             }
         }
     }

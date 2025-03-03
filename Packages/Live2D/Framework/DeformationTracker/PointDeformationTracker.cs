@@ -9,6 +9,11 @@ namespace Live2D.Cubism.Framework
     /// </summary>
     public sealed class PointDeformationTracker : MonoBehaviour
     {
+        /// <summary>
+        /// Maximum number of vertex references per point.
+        /// </summary>
+        internal const int MAX_TOTAL_VERTICES = 6;
+
         #region Data Structures
 
         [Serializable]
