@@ -5,6 +5,7 @@ using System.Linq;
 using Live2D.Cubism.Framework.Utils;
 using VertexReference = Live2D.Cubism.Framework.PointDeformationTracker.VertexReference;
 using Live2D.Cubism.Framework;
+using UnityEditor;
 
 namespace Live2D.Cubism.Editor.Inspectors
 {
@@ -663,6 +664,108 @@ namespace Live2D.Cubism.Editor.Inspectors
                 distance = Mathf.Max(distance, Constants.MIN_DISTANCE);
                 return Mathf.Exp(-Constants.DECAY_FACTOR * distance / rad);
             }
+        }
+
+        /// <summary>
+        /// Gets vertex references for a specific tracked point.
+        /// </summary>
+        /// <param name="tracker">The tracker containing the point.</param>
+        /// <param name="pointIndex">Index of the tracked point.</param>
+        /// <returns>Span of vertex references for the tracked point.</returns>
+        internal static ReadOnlySpan<VertexReference> GetVertexReferencesForPoint(PointDeformationTracker tracker, int pointIndex)
+        {
+            var point = tracker.trackedPoints[pointIndex];
+            int count = Math.Min(PointDeformationTracker.MAX_TOTAL_VERTICES, tracker.vertexReferences.Length - point.vertexReferencesStartIndex);
+            return new ReadOnlySpan<VertexReference>(tracker.vertexReferences, point.vertexReferencesStartIndex, count);
+        }
+
+        /// <summary>
+        /// Sets vertex references for a specific tracked point.
+        /// </summary>
+        /// <param name="tracker">The tracker containing the point.</param>
+        /// <param name="pointIndex">Index of the tracked point.</param>
+        /// <param name="newReferences">New vertex references to set.</param>
+        internal static void SetVertexReferencesForPoint(PointDeformationTracker tracker, int pointIndex, ReadOnlySpan<VertexReference> newReferences)
+        {
+            var point = tracker.trackedPoints[pointIndex];
+
+            // Always use exactly MAX_TOTAL_VERTICES slots per point
+            int newCount = Math.Min(newReferences.Length, PointDeformationTracker.MAX_TOTAL_VERTICES);
+
+            // Make sure the vertexReferences array is large enough
+            int requiredSize = point.vertexReferencesStartIndex + PointDeformationTracker.MAX_TOTAL_VERTICES;
+            if (tracker.vertexReferences.Length < requiredSize)
+            {
+                var newArray = new VertexReference[requiredSize];
+                if (tracker.vertexReferences.Length > 0)
+                    Array.Copy(tracker.vertexReferences, 0, newArray, 0, tracker.vertexReferences.Length);
+                tracker.vertexReferences = newArray;
+            }
+
+            // Copy the new references
+            for (int i = 0; i < newCount; i++)
+                tracker.vertexReferences[point.vertexReferencesStartIndex + i] = newReferences[i];
+
+            // If the new references are fewer than MAX_TOTAL_VERTICES, zero out the rest
+            for (int i = newCount; i < PointDeformationTracker.MAX_TOTAL_VERTICES; i++)
+            {
+                var zeroRef = tracker.vertexReferences[point.vertexReferencesStartIndex + i];
+                zeroRef.weight = 0; // Set weight to 0 to mark as invalid
+                tracker.vertexReferences[point.vertexReferencesStartIndex + i] = zeroRef;
+            }
+        }
+
+        /// <summary>
+        /// Recalculates all tracked points for a PointDeformationTracker.
+        /// Call this after changing the included drawables list.
+        /// </summary>
+        public static void RecalculateTrackedPoints(PointDeformationTracker tracker)
+        {
+            if (tracker.trackedPoints.Length == 0)
+                return;
+
+            Undo.RecordObject(tracker, "Update Tracked Points");
+
+            // Create a new vertex references array with fixed size per point
+            var allVertexReferences = new VertexReference[tracker.trackedPoints.Length * PointDeformationTracker.MAX_TOTAL_VERTICES];
+
+            // Recalculate vertex references for each point
+            for (int i = 0; i < tracker.trackedPoints.Length; i++)
+            {
+                var point = tracker.trackedPoints[i];
+
+                // Calculate current position
+                var currentPosition = tracker.GetLocalTrackedPosition(i);
+                Vector2 point2D = new Vector2(currentPosition.x, currentPosition.y);
+
+                // Recalculate vertex references using the current position and radius
+                var newVertexReferences = FindVerticesInRadius(
+                    point2D,
+                    point.radius,
+                    tracker.includedDrawables
+                );
+
+                // Set the start index for this point (fixed stride)
+                point.vertexReferencesStartIndex = i * PointDeformationTracker.MAX_TOTAL_VERTICES;
+                tracker.trackedPoints[i] = point;
+
+                // Copy vertex references to the array at the correct position
+                int copyCount = Math.Min(newVertexReferences.Length, PointDeformationTracker.MAX_TOTAL_VERTICES);
+                Array.Copy(newVertexReferences, 0, allVertexReferences, point.vertexReferencesStartIndex, copyCount);
+
+                // Zero out weights for any unused slots
+                for (int j = copyCount; j < PointDeformationTracker.MAX_TOTAL_VERTICES; j++)
+                {
+                    var emptyRef = allVertexReferences[point.vertexReferencesStartIndex + j];
+                    emptyRef.weight = 0;
+                    allVertexReferences[point.vertexReferencesStartIndex + j] = emptyRef;
+                }
+            }
+
+            // Assign the new vertex references array to the tracker
+            tracker.vertexReferences = allVertexReferences;
+
+            EditorUtility.SetDirty(tracker);
         }
     }
 }

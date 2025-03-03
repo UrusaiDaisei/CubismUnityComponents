@@ -27,8 +27,8 @@ namespace Live2D.Cubism.Framework
         [Serializable]
         internal struct TrackedPoint
         {
-            public VertexReference[] vertexReferences;  // Array of vertex references
-            public float radius;                        // Influence radius for this point
+            public int vertexReferencesStartIndex;  // Start index for this point's vertex references in the vertexReferences array
+            public float radius;                    // Influence radius for this point
         }
 
         #endregion
@@ -40,6 +40,9 @@ namespace Live2D.Cubism.Framework
 
         [SerializeField]
         internal TrackedPoint[] trackedPoints = { };
+
+        [SerializeField]
+        internal VertexReference[] vertexReferences = { };
 
         #endregion
 
@@ -60,31 +63,54 @@ namespace Live2D.Cubism.Framework
             }
         }
 
+        private Transform _cachedTransform;
+        private Transform CachedTransform
+        {
+            get
+            {
+                return _cachedTransform ??= transform;
+            }
+        }
+
         #endregion
 
         /// <summary>
         /// Gets the current calculated position for a tracked point.
         /// </summary>
-        public Vector3 GetTrackedPosition(int pointIndex)
+        public Vector3 GetLocalTrackedPosition(int pointIndex)
         {
+            // Bounds check - will be stripped in build
+            Debug.AssertFormat(pointIndex >= 0 && pointIndex < trackedPoints.Length,
+                             "PointIndex {0} is out of bounds. Valid range: 0-{1}",
+                             pointIndex, trackedPoints.Length - 1);
+
             var point = trackedPoints[pointIndex];
+
+            // Create a span over the vertex references needed for this point
+            ReadOnlySpan<VertexReference> vertexRefs = vertexReferences
+                .AsSpan(point.vertexReferencesStartIndex, MAX_TOTAL_VERTICES);
 
             // Calculate from vertex references
             Vector3 result = Vector3.zero;
             float totalWeight = 0;
 
-            for (int i = 0; i < point.vertexReferences.Length; i++)
+            // Iterate through the span
+            foreach (var vertexRef in vertexRefs)
             {
-                var vertexRef = point.vertexReferences[i];
                 var drawable = includedDrawables[vertexRef.drawableIndex];
                 var position = drawable.VertexPositions[vertexRef.vertexIndex];
-
                 result += position * vertexRef.weight;
                 totalWeight += vertexRef.weight;
             }
 
-            // Return the weighted average or zero if no valid references
-            return totalWeight > 0 ? result / totalWeight : Vector3.zero;
+            // Due to the way the weights are calculated,
+            // their sum will always be not zero
+            return result / totalWeight;
+        }
+
+        public Vector3 GetWorldTrackedPosition(int pointIndex)
+        {
+            return CachedTransform.TransformPoint(GetLocalTrackedPosition(pointIndex));
         }
     }
 }

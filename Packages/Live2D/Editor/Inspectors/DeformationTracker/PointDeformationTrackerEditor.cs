@@ -165,39 +165,6 @@ namespace Live2D.Cubism.Editor.Inspectors
             SceneView.RepaintAll();
         }
 
-        /// <summary>
-        /// Recalculates all tracked points for a PointDeformationTracker.
-        /// Call this after changing the included drawables list.
-        /// </summary>
-        public static void RecalculateTrackedPoints(PointDeformationTracker tracker)
-        {
-            if (tracker.trackedPoints.Length == 0)
-                return;
-
-            Undo.RecordObject(tracker, "Update Tracked Points");
-
-            // Recalculate vertex references for each point
-            for (int i = 0; i < tracker.trackedPoints.Length; i++)
-            {
-                var point = tracker.trackedPoints[i];
-
-                // Calculate current position
-                var currentPosition = tracker.GetTrackedPosition(i);
-                Vector2 point2D = new Vector2(currentPosition.x, currentPosition.y);
-
-                // Recalculate vertex references using the current position and radius
-                point.vertexReferences = FindVerticesInRadius(
-                    point2D,
-                    point.radius,
-                    tracker.includedDrawables
-                );
-
-                tracker.trackedPoints[i] = point;
-            }
-
-            EditorUtility.SetDirty(tracker);
-        }
-
         #endregion
 
         #region UI Setup

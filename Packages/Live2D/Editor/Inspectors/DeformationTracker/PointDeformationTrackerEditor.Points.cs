@@ -112,23 +112,40 @@ namespace Live2D.Cubism.Editor.Inspectors
             var localPosition = Tracker.transform.InverseTransformPoint(position);
             var point2D = new Vector2(localPosition.x, localPosition.y);
 
-            var newTrackedPoint = new PointDeformationTracker.TrackedPoint
+            // Calculate the index for the new point
+            int newPointIndex = Tracker.trackedPoints.Length;
+
+            // Calculate start index for vertex references (fixed stride)
+            int vertexStartIndex = newPointIndex * Live2D.Cubism.Framework.PointDeformationTracker.MAX_TOTAL_VERTICES;
+
+            // Create the new tracked point
+            var newTrackedPoint = new Live2D.Cubism.Framework.PointDeformationTracker.TrackedPoint
             {
-                radius = DEFAULT_HANDLE_RADIUS
+                radius = DEFAULT_HANDLE_RADIUS,
+                vertexReferencesStartIndex = vertexStartIndex
             };
 
-            newTrackedPoint.vertexReferences = FindVerticesInRadius(
+            // Find vertices for the new point
+            var newVertexReferences = FindVerticesInRadius(
                 point2D,
                 DEFAULT_HANDLE_RADIUS,
                 Tracker.includedDrawables
             );
 
+            // Add the point to the array
             var points = Tracker.trackedPoints;
             Array.Resize(ref points, points.Length + 1);
-            int newIndex = points.Length - 1;
-            points[newIndex] = newTrackedPoint;
-
+            points[newPointIndex] = newTrackedPoint;
             Tracker.trackedPoints = points;
+
+            // Ensure the vertex references array is big enough
+            // (SetVertexReferencesForPoint will handle this, but we need to make sure there's at least an empty array)
+            if (Tracker.vertexReferences == null)
+                Tracker.vertexReferences = new Live2D.Cubism.Framework.PointDeformationTracker.VertexReference[0];
+
+            // Use the helper method to set the vertex references
+            SetVertexReferencesForPoint(Tracker, newPointIndex, newVertexReferences);
+
             EditorUtility.SetDirty(Tracker);
         }
 
@@ -388,13 +405,18 @@ namespace Live2D.Cubism.Editor.Inspectors
             var newPosition = Tracker.transform.InverseTransformPoint(_draggingPoint);
             var point2D = new Vector2(newPosition.x, newPosition.y);
 
-            point.vertexReferences = FindVerticesInRadius(
+            // Find new vertex references with the new position
+            var newVertexReferences = FindVerticesInRadius(
                 point2D,
                 point.radius,
                 Tracker.includedDrawables
             );
 
+            // Update the tracker's point
             Tracker.trackedPoints[index] = point;
+
+            // Use the helper method to set the vertex references
+            SetVertexReferencesForPoint(Tracker, index, newVertexReferences);
 
             _isDragging = false;
             _isAxisConstrained = false;
@@ -511,13 +533,23 @@ namespace Live2D.Cubism.Editor.Inspectors
         /// </summary>
         /// <param name="position">Position of the point.</param>
         /// <param name="point">The tracked point data.</param>
-        private void DrawVertexConnections(Vector3 position, PointDeformationTracker.TrackedPoint point)
+        private void DrawVertexConnections(Vector3 position, Live2D.Cubism.Framework.PointDeformationTracker.TrackedPoint point)
         {
             var originalColor = Handles.color;
 
-            for (int i = 0; i < point.vertexReferences.Length; i++)
+            // Calculate the range of vertex references for this point
+            int startIndex = point.vertexReferencesStartIndex;
+            int endIndex = startIndex + Live2D.Cubism.Framework.PointDeformationTracker.MAX_TOTAL_VERTICES;
+            endIndex = Math.Min(endIndex, Tracker.vertexReferences.Length);
+
+            for (int i = startIndex; i < endIndex; i++)
             {
-                var vertexRef = point.vertexReferences[i];
+                var vertexRef = Tracker.vertexReferences[i];
+
+                // Skip vertices with zero weight
+                if (vertexRef.weight <= 0)
+                    continue;
+
                 var drawable = Tracker.includedDrawables[vertexRef.drawableIndex];
                 var vertex = drawable.VertexPositions[vertexRef.vertexIndex];
 
@@ -601,42 +633,81 @@ namespace Live2D.Cubism.Editor.Inspectors
             if (!Application.isPlaying && _isDragging && _selectedPointIndex == index)
                 return _draggingPoint;
 
-            return tracker.GetTrackedPosition(index);
+            return tracker.GetLocalTrackedPosition(index);
         }
 
         /// <summary>
-        /// Deletes a tracked point.
+        /// Deletes a tracked point at the specified index.
         /// </summary>
         /// <param name="index">Index of the point to delete.</param>
         private void DeletePoint(int index)
         {
             Undo.RecordObject(Tracker, "Delete Track Point");
 
-            var points = Tracker.trackedPoints;
+            var tracker = Tracker;
+            var points = tracker.trackedPoints;
+            int pointCount = points.Length;
 
-            if (index < 0 || index >= points.Length)
+            if (index < 0 || index >= pointCount)
                 return;
 
-            var newPoints = new PointDeformationTracker.TrackedPoint[points.Length - 1];
+            // Create a new points array without the deleted point
+            var newPoints = new Live2D.Cubism.Framework.PointDeformationTracker.TrackedPoint[pointCount - 1];
 
+            // Copy points before the deleted point
             if (index > 0)
                 Array.Copy(points, 0, newPoints, 0, index);
 
-            if (index < points.Length - 1)
-                Array.Copy(points, index + 1, newPoints, index, points.Length - index - 1);
+            // Copy points after the deleted point
+            if (index < pointCount - 1)
+                Array.Copy(points, index + 1, newPoints, index, pointCount - index - 1);
 
-            Tracker.trackedPoints = newPoints;
-            _selectedPointIndex = -1;
+            // Create a new vertex references array without the deleted point's references
+            int oldSize = tracker.vertexReferences.Length;
+            int newSize = oldSize - Live2D.Cubism.Framework.PointDeformationTracker.MAX_TOTAL_VERTICES;
+            var newVertexRefs = new Live2D.Cubism.Framework.PointDeformationTracker.VertexReference[newSize];
 
-            EditorUtility.SetDirty(Tracker);
-            SceneView.RepaintAll();
+            // Calculate the start index of the point being deleted
+            int deletedPointStart = points[index].vertexReferencesStartIndex;
+
+            // Copy references before the deleted point
+            if (deletedPointStart > 0)
+                Array.Copy(tracker.vertexReferences, 0, newVertexRefs, 0, deletedPointStart);
+
+            // Copy references after the deleted point
+            int deletedPointEnd = deletedPointStart + Live2D.Cubism.Framework.PointDeformationTracker.MAX_TOTAL_VERTICES;
+            if (deletedPointEnd < oldSize)
+            {
+                int remaining = oldSize - deletedPointEnd;
+                Array.Copy(tracker.vertexReferences, deletedPointEnd, newVertexRefs, deletedPointStart, remaining);
+            }
+
+            // Update the start indices for the points after the deleted one
+            for (int i = index; i < newPoints.Length; i++)
+            {
+                var point = newPoints[i];
+                point.vertexReferencesStartIndex -= Live2D.Cubism.Framework.PointDeformationTracker.MAX_TOTAL_VERTICES;
+                newPoints[i] = point;
+            }
+
+            // Update the tracker
+            tracker.trackedPoints = newPoints;
+            tracker.vertexReferences = newVertexRefs;
+
+            // Update selected point index
+            if (_selectedPointIndex == index)
+                _selectedPointIndex = -1;
+            else if (_selectedPointIndex > index)
+                _selectedPointIndex--;
+
+            EditorUtility.SetDirty(tracker);
         }
 
         /// <summary>
-        /// Adjusts the radius of a tracked point.
+        /// Adjusts the radius of a tracked point and recalculates its vertex references.
         /// </summary>
-        /// <param name="index">Index of the point.</param>
-        /// <param name="delta">Amount to adjust by.</param>
+        /// <param name="index">Index of the point to adjust.</param>
+        /// <param name="delta">Change in radius value.</param>
         private void AdjustPointRadius(int index, float delta)
         {
             var tracker = Tracker;
@@ -650,13 +721,18 @@ namespace Live2D.Cubism.Editor.Inspectors
             Undo.RecordObject(tracker, "Change Point Radius");
 
             point.radius = newRadius;
-            point.vertexReferences = FindVerticesInRadius(
+            tracker.trackedPoints[index] = point;
+
+            // Find new vertex references with the updated radius
+            var newVertexReferences = FindVerticesInRadius(
                 point2D,
                 point.radius,
                 tracker.includedDrawables
             );
 
-            tracker.trackedPoints[index] = point;
+            // Use the helper method to set the vertex references
+            SetVertexReferencesForPoint(tracker, index, newVertexReferences);
+
             EditorUtility.SetDirty(tracker);
         }
 
