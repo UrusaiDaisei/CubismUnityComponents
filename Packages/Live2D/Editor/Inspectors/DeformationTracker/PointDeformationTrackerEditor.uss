@@ -5,10 +5,15 @@
     margin-bottom: 8px;
 }
 
+/* Action section container */
+.action-section {
+    margin: 6px 3px 12px 3px;
+}
+
 /* Action buttons */
 .action-buttons {
     flex-direction: row;
-    margin: 6px 3px 12px 3px;
+    margin: 0 0 2px 0;
 }
 
 .action-buttons Button {
@@ -56,4 +61,15 @@
     white-space: normal;
     flex-grow: 1;
     flex-shrink: 1;
+}
+
+/* Warning Message */
+.warning-message {
+    color: rgb(255, 180, 0);
+    padding: 2px 0;
+    margin: 0;
+    -unity-font-style: bold;
+    font-size: 11px;
+    -unity-text-align: middle-center;
+    width: 100%;
 } 

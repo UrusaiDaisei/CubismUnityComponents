@@ -9,10 +9,16 @@
             <!-- Will be populated with Script property field -->
         </VisualElement>
         
-        <!-- Main Action Buttons -->
-        <VisualElement class="action-buttons">
-            <Button name="edit-points-button" text="Edit Points" />
-            <Button name="include-drawables-button" text="Include Drawables" class="no-right-margin" />
+        <!-- Action Section Container -->
+        <VisualElement class="action-section">
+            <!-- Main Action Buttons -->
+            <VisualElement class="action-buttons">
+                <Button name="edit-points-button" text="Edit Points" />
+                <Button name="include-drawables-button" text="Include Drawables" class="no-right-margin" />
+            </VisualElement>
+            
+            <!-- No Drawables Warning Message -->
+            <Label name="no-drawables-message" text="Please include drawables before editing points." class="warning-message" style="display: none;" />
         </VisualElement>
         
         <!-- Visualization Options -->

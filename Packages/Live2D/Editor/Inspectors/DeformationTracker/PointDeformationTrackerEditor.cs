@@ -25,6 +25,7 @@ namespace Live2D.Cubism.Editor.Inspectors
         private Label _statsTextLabel;
         private VisualElement _editInstructionsContainer;
         private VisualElement _instructionsList;
+        private Label _noDrawablesMessageLabel;
         private bool _isEditing;
         private bool _showVertexConnections = false;
 
@@ -65,6 +66,7 @@ namespace Live2D.Cubism.Editor.Inspectors
             _statsTextLabel = _root.Q<Label>("stats-text");
             _editInstructionsContainer = _root.Q("edit-instructions-container");
             _instructionsList = _root.Q("instructions-list");
+            _noDrawablesMessageLabel = _root.Q<Label>("no-drawables-message");
 
             // Add script field to script container
             var scriptContainer = _root.Q("script-container");
@@ -115,6 +117,7 @@ namespace Live2D.Cubism.Editor.Inspectors
         {
             UpdateStatsText();
             UpdateEditInstructionsVisibility();
+            UpdateEditButtonState();
         }
 
         public void UpdateStatsText()
@@ -140,6 +143,18 @@ namespace Live2D.Cubism.Editor.Inspectors
         {
             if (_editButton == null)
                 return;
+
+            // Get the number of drawables
+            int drawablesCount = Tracker.includedDrawables?.Length ?? 0;
+
+            // Disable the edit button if there are no drawables
+            _editButton.SetEnabled(drawablesCount > 0);
+
+            // Show or hide the helper message
+            if (_noDrawablesMessageLabel != null)
+            {
+                _noDrawablesMessageLabel.style.display = (drawablesCount > 0) ? DisplayStyle.None : DisplayStyle.Flex;
+            }
 
             // Update button appearance based on edit mode
             if (_isEditing)
@@ -211,6 +226,7 @@ namespace Live2D.Cubism.Editor.Inspectors
         private void OnIncludeDrawablesApplied()
         {
             UpdateStatsText();
+            UpdateEditButtonState();
         }
 
         #endregion
