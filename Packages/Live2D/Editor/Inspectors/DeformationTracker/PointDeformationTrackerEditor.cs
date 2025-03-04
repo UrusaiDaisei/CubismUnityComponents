@@ -117,7 +117,7 @@ namespace Live2D.Cubism.Editor.Inspectors
             UpdateEditInstructionsVisibility();
         }
 
-        private void UpdateStatsText()
+        public void UpdateStatsText()
         {
             if (_statsTextLabel == null || Tracker == null)
                 return;
@@ -204,8 +204,13 @@ namespace Live2D.Cubism.Editor.Inspectors
                 return;
             }
 
-            // Create a dialog to select which drawables to include
-            DrawableSelectionWindow.ShowWindow(Tracker, allDrawables);
+            // Create a dialog to select which drawables to include, passing this editor instance
+            DrawableSelectionWindow.ShowWindow(Tracker, allDrawables, OnIncludeDrawablesApplied);
+        }
+
+        private void OnIncludeDrawablesApplied()
+        {
+            UpdateStatsText();
         }
 
         #endregion

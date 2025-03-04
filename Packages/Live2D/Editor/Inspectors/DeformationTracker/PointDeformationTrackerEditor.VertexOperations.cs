@@ -719,12 +719,9 @@ namespace Live2D.Cubism.Editor.Inspectors
         /// Recalculates all tracked points for a PointDeformationTracker.
         /// Call this after changing the included drawables list.
         /// </summary>
-        public static void RecalculateTrackedPoints(PointDeformationTracker tracker)
+        public static void UpdateIncludedDrawables(PointDeformationTracker tracker, CubismDrawable[] newDrawables)
         {
-            if (tracker.trackedPoints.Length == 0)
-                return;
-
-            Undo.RecordObject(tracker, "Update Tracked Points");
+            Undo.RecordObject(tracker, "Included Drawables Updated");
 
             // Create a new vertex references array with fixed size per point
             var allVertexReferences = new VertexReference[tracker.trackedPoints.Length * PointDeformationTracker.MAX_TOTAL_VERTICES];
@@ -742,7 +739,7 @@ namespace Live2D.Cubism.Editor.Inspectors
                 var newVertexReferences = FindVerticesInRadius(
                     point2D,
                     point.radius,
-                    tracker.includedDrawables
+                    newDrawables
                 );
 
                 // Set the start index for this point (fixed stride)
@@ -762,9 +759,10 @@ namespace Live2D.Cubism.Editor.Inspectors
                 }
             }
 
+            // Set the included drawables
+            tracker.includedDrawables = newDrawables;
             // Assign the new vertex references array to the tracker
             tracker.vertexReferences = allVertexReferences;
-
             EditorUtility.SetDirty(tracker);
         }
     }

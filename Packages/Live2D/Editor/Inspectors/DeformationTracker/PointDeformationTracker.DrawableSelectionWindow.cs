@@ -5,6 +5,7 @@ using UnityEngine.UIElements;
 using Live2D.Cubism.Core;
 using Live2D.Cubism.Framework;
 using System.Linq;
+using System;
 
 namespace Live2D.Cubism.Editor.Inspectors
 {
@@ -23,6 +24,8 @@ namespace Live2D.Cubism.Editor.Inspectors
 
             private PointDeformationTracker _tracker;
             private IList<CubismDrawable> _allDrawables;
+
+            private Action _applyCallback;
             private readonly List<CubismDrawable> _availableDrawables = new List<CubismDrawable>();
             private readonly List<CubismDrawable> _includedDrawables = new List<CubismDrawable>();
             private readonly List<CubismDrawable> _selectedAvailableDrawables = new List<CubismDrawable>();
@@ -42,12 +45,14 @@ namespace Live2D.Cubism.Editor.Inspectors
             /// </summary>
             /// <param name="tracker">The PointDeformationTracker to update</param>
             /// <param name="allDrawables">List of all available drawables in the model</param>
-            public static void ShowWindow(PointDeformationTracker tracker, IList<CubismDrawable> allDrawables)
+            /// <param name="applyCallback">Callback to invoke when the apply button is clicked</param>
+            public static void ShowWindow(PointDeformationTracker tracker, IList<CubismDrawable> allDrawables, Action applyCallback)
             {
                 var window = GetWindow<DrawableSelectionWindow>("Include Drawables");
                 window.minSize = new Vector2(600, 400);
                 window._tracker = tracker;
                 window._allDrawables = allDrawables;
+                window._applyCallback = applyCallback;
                 window.Initialize();
                 window.Show();
             }
@@ -431,14 +436,13 @@ namespace Live2D.Cubism.Editor.Inspectors
             {
                 Undo.RecordObject(_tracker, "Update Included Drawables");
 
-                // Set the included drawables
-                _tracker.includedDrawables = _includedDrawables.ToArray();
-
                 // Recalculate all tracked points
-                RecalculateTrackedPoints(_tracker);
-
+                UpdateIncludedDrawables(_tracker, _includedDrawables.ToArray());
 
                 EditorUtility.SetDirty(_tracker);
+
+                _applyCallback?.Invoke();
+
                 Close();
             }
 

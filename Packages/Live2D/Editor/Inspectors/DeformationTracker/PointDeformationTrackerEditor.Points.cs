@@ -147,6 +147,8 @@ namespace Live2D.Cubism.Editor.Inspectors
             SetVertexReferencesForPoint(Tracker, newPointIndex, newVertexReferences);
 
             EditorUtility.SetDirty(Tracker);
+            // Update statistics after adding a new point
+            UpdateStatsText();
         }
 
         /// <summary>
@@ -682,15 +684,10 @@ namespace Live2D.Cubism.Editor.Inspectors
                 Array.Copy(tracker.vertexReferences, deletedPointEnd, newVertexRefs, deletedPointStart, remaining);
             }
 
-            // Update the start indices for the points after the deleted one
-            for (int i = index; i < newPoints.Length; i++)
-            {
-                var point = newPoints[i];
-                point.vertexReferencesStartIndex -= Live2D.Cubism.Framework.PointDeformationTracker.MAX_TOTAL_VERTICES;
-                newPoints[i] = point;
-            }
+            // Update references to account for the deleted point
+            UpdateVertexReferencesIndices(tracker, newPoints, deletedPointStart, deletedPointEnd);
 
-            // Update the tracker
+            // Apply changes to the tracker
             tracker.trackedPoints = newPoints;
             tracker.vertexReferences = newVertexRefs;
 
@@ -701,6 +698,8 @@ namespace Live2D.Cubism.Editor.Inspectors
                 _selectedPointIndex--;
 
             EditorUtility.SetDirty(tracker);
+            // Update statistics after deleting a point
+            UpdateStatsText();
         }
 
         /// <summary>
@@ -734,6 +733,28 @@ namespace Live2D.Cubism.Editor.Inspectors
             SetVertexReferencesForPoint(tracker, index, newVertexReferences);
 
             EditorUtility.SetDirty(tracker);
+        }
+
+        /// <summary>
+        /// Updates the vertex reference indices for all points after deleting a point.
+        /// </summary>
+        /// <param name="tracker">The tracker instance</param>
+        /// <param name="points">The updated points array</param>
+        /// <param name="deletedPointStart">The start index of the deleted point's vertex references</param>
+        /// <param name="deletedPointEnd">The end index of the deleted point's vertex references</param>
+        private void UpdateVertexReferencesIndices(PointDeformationTracker tracker, Live2D.Cubism.Framework.PointDeformationTracker.TrackedPoint[] points, int deletedPointStart, int deletedPointEnd)
+        {
+            // Update the start indices for the points after the deleted one
+            for (int i = 0; i < points.Length; i++)
+            {
+                var point = points[i];
+                // If this point's references were after the deleted point, adjust the index
+                if (point.vertexReferencesStartIndex > deletedPointStart)
+                {
+                    point.vertexReferencesStartIndex -= Live2D.Cubism.Framework.PointDeformationTracker.MAX_TOTAL_VERTICES;
+                    points[i] = point;
+                }
+            }
         }
 
         #endregion
