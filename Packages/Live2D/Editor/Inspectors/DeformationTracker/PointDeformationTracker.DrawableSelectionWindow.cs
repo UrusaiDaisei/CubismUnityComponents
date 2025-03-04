@@ -260,8 +260,17 @@ namespace Live2D.Cubism.Editor.Inspectors
                 var item = new Label(drawable.name);
                 item.AddToClassList("drawable-item");
 
-                // Set selected state if in selection list
-                if (selectionList.Contains(drawable))
+                // Check if this drawable is locked (has dependent points)
+                bool isLocked = HasDependentPoints(drawable);
+                bool isSelected = selectionList.Contains(drawable);
+
+                if (isLocked)
+                {
+                    item.AddToClassList("locked");
+                    item.text = $"{drawable.name} [LOCKED]";
+                }
+
+                if (isSelected)
                 {
                     item.AddToClassList("selected");
                 }
@@ -269,8 +278,12 @@ namespace Live2D.Cubism.Editor.Inspectors
                 // Add click handler for selection and highlighting in the editor
                 item.RegisterCallback<ClickEvent>(evt =>
                 {
-                    var isMultiSelect = (evt.ctrlKey || evt.commandKey || evt.shiftKey);
-                    ToggleItemSelection(item, drawable, selectionList, isMultiSelect);
+                    // Don't allow selecting locked items in the included list
+                    if (!(isLocked && selectionList == _selectedIncludedDrawables))
+                    {
+                        var isMultiSelect = (evt.ctrlKey || evt.commandKey || evt.shiftKey);
+                        ToggleItemSelection(item, drawable, selectionList, isMultiSelect);
+                    }
 
                     // Highlight the drawable in the editor
                     HighlightDrawableInEditor(drawable);
@@ -361,6 +374,10 @@ namespace Live2D.Cubism.Editor.Inspectors
 
                 foreach (var drawable in _selectedIncludedDrawables.ToList())
                 {
+                    // Skip locked drawables that have dependent points
+                    if (HasDependentPoints(drawable))
+                        continue;
+
                     _includedDrawables.Remove(drawable);
                     _availableDrawables.Add(drawable);
                 }
@@ -416,6 +433,9 @@ namespace Live2D.Cubism.Editor.Inspectors
                         .ToList();
                 }
 
+                // Filter out drawables with dependent points
+                drawablesToMove = drawablesToMove.Where(d => !HasDependentPoints(d)).ToList();
+
                 foreach (var drawable in drawablesToMove)
                 {
                     _availableDrawables.Add(drawable);
@@ -444,6 +464,24 @@ namespace Live2D.Cubism.Editor.Inspectors
                 _applyCallback?.Invoke();
 
                 Close();
+            }
+
+            /// <summary>
+            /// Checks if a drawable has any tracked points that depend on it.
+            /// </summary>
+            /// <param name="drawable">The drawable to check</param>
+            /// <returns>True if any tracked point depends on this drawable</returns>
+            private bool HasDependentPoints(CubismDrawable drawable)
+            {
+                // Get the index of the drawable in the tracker's includedDrawables array
+                int drawableIndex = Array.IndexOf(_tracker.includedDrawables, drawable);
+
+                // If the drawable is not in the tracker's includedDrawables, it has no dependent points
+                if (drawableIndex < 0)
+                    return false;
+
+                // Use LINQ to check if any vertex reference uses this drawable
+                return _tracker.vertexReferences.Any(reference => reference.drawableIndex == drawableIndex);
             }
 
             #endregion

@@ -109,6 +109,19 @@
     color: var(--unity-colors-highlight-text);
 }
 
+.drawable-item.locked {
+    color: var(--unity-colors-warning-text);
+    background-color: var(--unity-colors-alternated_rows-background);
+    border-left-width: 3px;
+    border-left-color: var(--unity-colors-warning-border);
+    -unity-font-style: bold;
+}
+
+.drawable-item.locked.selected {
+    background-color: var(--unity-colors-warning-background);
+    color: var(--unity-colors-warning-text);
+}
+
 .button-container {
     flex-direction: row;
     margin-top: 10px;
