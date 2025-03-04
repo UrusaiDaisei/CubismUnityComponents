@@ -61,6 +61,11 @@
                 </VisualElement>
             </VisualElement>
         </HelpBox>
+        
+        <!-- Clear Points Button (at bottom) -->
+        <VisualElement class="bottom-button-container">
+            <Button name="clear-points-button" text="Clear Points" />
+        </VisualElement>
     </VisualElement>
     
 </UXML> 

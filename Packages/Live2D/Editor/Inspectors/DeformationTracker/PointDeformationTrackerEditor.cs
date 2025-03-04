@@ -21,6 +21,7 @@ namespace Live2D.Cubism.Editor.Inspectors
         private VisualElement _root;
         private Button _editButton;
         private Button _includeDrawablesButton;
+        private Button _clearPointsButton;
         private Toggle _showVertexConnectionsToggle;
         private Label _statsTextLabel;
         private VisualElement _editInstructionsContainer;
@@ -62,6 +63,7 @@ namespace Live2D.Cubism.Editor.Inspectors
             // Get references to UI elements
             _editButton = _root.Q<Button>("edit-points-button");
             _includeDrawablesButton = _root.Q<Button>("include-drawables-button");
+            _clearPointsButton = _root.Q<Button>("clear-points-button");
             _showVertexConnectionsToggle = _root.Q<Toggle>("show-vertex-connections");
             _statsTextLabel = _root.Q<Label>("stats-text");
             _editInstructionsContainer = _root.Q("edit-instructions-container");
@@ -111,6 +113,12 @@ namespace Live2D.Cubism.Editor.Inspectors
             {
                 _includeDrawablesButton.clicked += ShowIncludeDrawablesDialog;
             }
+
+            if (_clearPointsButton != null)
+            {
+                _clearPointsButton.clicked += ShowClearPointsConfirmation;
+                UpdateClearPointsButtonState();
+            }
         }
 
         private void UpdateUI()
@@ -118,6 +126,7 @@ namespace Live2D.Cubism.Editor.Inspectors
             UpdateStatsText();
             UpdateEditInstructionsVisibility();
             UpdateEditButtonState();
+            UpdateClearPointsButtonState();
         }
 
         public void UpdateStatsText()
@@ -172,12 +181,21 @@ namespace Live2D.Cubism.Editor.Inspectors
         private void OnEnable()
         {
             ResetEditorState();
+            Undo.undoRedoPerformed += OnUndoRedoPerformed;
         }
 
         private void OnDisable()
         {
             ResetEditorState();
+            Undo.undoRedoPerformed -= OnUndoRedoPerformed;
             SceneView.RepaintAll();
+        }
+
+        private void OnUndoRedoPerformed()
+        {
+            // Update UI after undo/redo operations
+            UpdateStatsText();
+            UpdateClearPointsButtonState();
         }
 
         #endregion
@@ -227,6 +245,44 @@ namespace Live2D.Cubism.Editor.Inspectors
         {
             UpdateStatsText();
             UpdateEditButtonState();
+        }
+
+        private void ShowClearPointsConfirmation()
+        {
+            bool confirm = EditorUtility.DisplayDialog(
+                "Clear All Points",
+                "This will remove all tracked points but keep the drawables.\nDo you want to continue?",
+                "Clear Points",
+                "Cancel"
+            );
+
+            if (confirm)
+            {
+                ClearAllPoints();
+            }
+        }
+
+        private void ClearAllPoints()
+        {
+            // Create a new empty array for tracked points
+            Undo.RecordObject(Tracker, "Clear Points");
+            Tracker.trackedPoints = new PointDeformationTracker.TrackedPoint[0];
+            Tracker.vertexReferences = new PointDeformationTracker.VertexReference[0];
+            EditorUtility.SetDirty(Tracker);
+
+            // Update the UI
+            UpdateStatsText();
+            UpdateClearPointsButtonState();
+        }
+
+        private void UpdateClearPointsButtonState()
+        {
+            if (_clearPointsButton == null)
+                return;
+
+            // Enable the clear button only if there are points to clear
+            int pointsCount = Tracker.trackedPoints?.Length ?? 0;
+            _clearPointsButton.SetEnabled(pointsCount > 0);
         }
 
         #endregion

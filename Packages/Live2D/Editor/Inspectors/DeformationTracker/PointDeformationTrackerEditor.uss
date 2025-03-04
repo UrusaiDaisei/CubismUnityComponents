@@ -72,4 +72,22 @@
     font-size: 11px;
     -unity-text-align: middle-center;
     width: 100%;
+}
+
+/* Bottom Button Container */
+.bottom-button-container {
+    margin: 8px 3px 8px 3px;
+}
+
+.bottom-button-container Button {
+    width: 100%;
+    min-height: 18px;
+    margin: 0;
+}
+
+/* Danger Button - keeping for potential future use */
+.danger-button {
+    background-color: rgb(204, 85, 85);
+    color: white;
+    -unity-font-style: bold;
 } 
