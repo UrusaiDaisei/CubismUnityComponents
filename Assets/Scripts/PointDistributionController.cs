@@ -20,11 +20,17 @@ public class PointDistributionController : MonoBehaviour
     [SerializeField]
     private List<Holder> boundaryVertices = new List<Holder>();
 
+    // Store the merged boundaries after union operations
+    [SerializeField]
+    private List<Holder> mergedBoundaries = new List<Holder>();
+
     [Serializable]
     private struct Holder
     {
         public Vector2[] vertices;
     }
+
+    public bool Toogle = true;
 
     /// <summary>
     /// Updates the mesh data and extracts boundary vertices from the target drawables.
@@ -62,6 +68,39 @@ public class PointDistributionController : MonoBehaviour
     }
 
     /// <summary>
+    /// Performs a boolean union operation on all boundary polygons that intersect.
+    /// </summary>
+    [ContextMenu("Merge Intersecting Polygons")]
+    public void MergeIntersectingPolygons()
+    {
+        // Make sure we have boundary data
+        if (boundaryVertices.Count == 0)
+        {
+            Debug.LogWarning("No boundary data available. Run 'Extract Mesh Data' first.");
+            return;
+        }
+
+        // Convert our boundaries to the format expected by the PolygonClipper
+        List<Vector2[]> polygons = new List<Vector2[]>();
+        foreach (var holder in boundaryVertices)
+        {
+            polygons.Add(holder.vertices);
+        }
+
+        // Perform the union operation
+        List<Vector2[]> unionResult = PolygonClipper.UnionPolygons(polygons);
+
+        // Store the result
+        mergedBoundaries.Clear();
+        foreach (var polygon in unionResult)
+        {
+            mergedBoundaries.Add(new Holder { vertices = polygon });
+        }
+
+        Debug.Log($"Merged {boundaryVertices.Count} polygons into {mergedBoundaries.Count} result polygons.");
+    }
+
+    /// <summary>
     /// Gets a color based on the index, with full saturation and value.
     /// </summary>
     private Color GetColorForIndex(int index)
@@ -76,29 +115,58 @@ public class PointDistributionController : MonoBehaviour
     /// </summary>
     private void OnDrawGizmos()
     {
-        // Draw the boundary vertices
-        int drawableIndex = 0;
-        foreach (var holder in boundaryVertices)
+        if (Toogle)
         {
-            // Get a unique color for this drawable based on its index
-            Color drawableColor = GetColorForIndex(drawableIndex);
-            Gizmos.color = drawableColor;
-
-            // Draw vertices
-            foreach (var vertex in holder.vertices)
+            // Draw the original boundary vertices with transparency
+            int drawableIndex = 0;
+            foreach (var holder in boundaryVertices)
             {
-                Gizmos.DrawSphere(vertex, vertexSize);
-            }
+                // Get a unique color for this drawable based on its index
+                Color drawableColor = GetColorForIndex(drawableIndex);
+                Gizmos.color = drawableColor;
 
-            // Draw lines connecting consecutive boundary vertices
-            for (int i = 0; i < holder.vertices.Length; i++)
+                // Draw vertices
+                foreach (var vertex in holder.vertices)
+                {
+                    Gizmos.DrawSphere(vertex, vertexSize * 0.7f);
+                }
+
+                // Draw lines connecting consecutive boundary vertices
+                for (int i = 0; i < holder.vertices.Length; i++)
+                {
+                    Vector3 start = holder.vertices[i];
+                    Vector3 end = holder.vertices[(i + 1) % holder.vertices.Length]; // Connect back to start
+                    Gizmos.DrawLine(start, end);
+                }
+
+                drawableIndex++;
+            }
+        }
+        else
+        {
+            // Draw the merged boundaries with full opacity
+            for (int i = 0; i < mergedBoundaries.Count; i++)
             {
-                Vector3 start = holder.vertices[i];
-                Vector3 end = holder.vertices[(i + 1) % holder.vertices.Length]; // Connect back to start
-                Gizmos.DrawLine(start, end);
-            }
+                // Use a different color scheme for merged boundaries
+                Color mergedColor = Color.HSVToRGB((float)i / Mathf.Max(1, mergedBoundaries.Count), 0.8f, 1f);
+                Gizmos.color = mergedColor;
 
-            drawableIndex++;
+                var holder = mergedBoundaries[i];
+
+                // Draw vertices
+                foreach (var vertex in holder.vertices)
+                {
+                    Gizmos.DrawSphere(vertex, vertexSize);
+                }
+
+                // Draw lines connecting consecutive boundary vertices
+                for (int j = 0; j < holder.vertices.Length; j++)
+                {
+                    Vector3 start = holder.vertices[j];
+                    Vector3 end = holder.vertices[(j + 1) % holder.vertices.Length]; // Connect back to start
+                    Gizmos.DrawLine(start, end);
+                }
+            }
         }
     }
 }
