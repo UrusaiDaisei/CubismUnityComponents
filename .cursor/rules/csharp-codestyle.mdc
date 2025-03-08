@@ -6,11 +6,12 @@ alwaysApply: false
 # Language-Specific Guidelines
 
 ## C# Guidelines
-- Use PascalCase for class names, public properties, and methods
-- Use camelCase for private fields (prefix with _)
-- Use `readonly` where applicable
-- Prefer expression-bodied members for simple methods
-- Use uppercase snake_case for class level constants
-- Classes should always be sealed by default
-- Each region start/end should have a whiteline space between it, the code
-- Slways prefer the `var` type for local variables, instead explicit variable types
+- Use PascalCase for class names, public properties, and methods;
+- Use camelCase for private fields (prefix with _);
+- Private static field names should be prefixed with "s_";
+- Use `readonly` where applicable;
+- Prefer expression-bodied members for simple methods;
+- Use uppercase snake_case for class level constants;
+- Classes should always be sealed by default;
+- Always prefer the `var` type for local variables, instead explicit variable types;
+- Each region start/end should have a whiteline space between it, the code;

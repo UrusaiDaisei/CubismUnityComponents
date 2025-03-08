@@ -10,7 +10,7 @@ namespace Martinez
         /// <summary>
         /// Position of this event in the sweep line data structure.
         /// </summary>
-        public AVLNode<SweepEvent> positionInSweepLine;
+        public AVLTree<SweepEvent>.Node positionInSweepLine;
 
         /// <summary>
         /// The 2D point associated with this event.

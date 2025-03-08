@@ -22,7 +22,7 @@ namespace Martinez
 
             float rightbound = Mathf.Min(sbbox.xMax, cbbox.xMax);
 
-            AVLNode<SweepEvent> prev, next, begin = null;
+            AVLTree<SweepEvent>.Node prev, next, begin = null;
 
             while (eventQueue.Length != 0)
             {
@@ -69,7 +69,7 @@ namespace Martinez
                     {
                         if (possibleIntersection(prev.Value, m_event, eventQueue) == 2)
                         {
-                            AVLNode<SweepEvent> prevprev = prev;
+                            AVLTree<SweepEvent>.Node prevprev = prev;
                             if (prevprev != begin) prevprev = prevprev.GetPredecessor();
                             else prevprev = null;
 
