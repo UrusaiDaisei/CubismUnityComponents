@@ -9,7 +9,7 @@ namespace Martinez
     {
         List<SweepEvent> subdivideSegments(MinHeap<SweepEvent> eventQueue, Rect sbbox, Rect cbbox, ClipType operation)
         {
-            AVLTree<SweepEvent> sweepLine = new AVLTree<SweepEvent>(new CompareSegments());
+            AVLTree<SweepEvent> sweepLine = new AVLTree<SweepEvent>(CompareSegments.Default);
             List<SweepEvent> sortedEvents = new List<SweepEvent>();
 
             float rightbound = Mathf.Min(sbbox.xMax, cbbox.xMax);

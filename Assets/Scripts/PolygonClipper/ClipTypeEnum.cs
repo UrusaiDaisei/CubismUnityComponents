@@ -1,5 +1,11 @@
 
 namespace Martinez
 {
-    public enum ClipType { None, Intersection, Union, Difference, Xor };
+    public enum ClipType
+    {
+        Union,
+        Intersection,
+        Difference,
+        Xor
+    };
 }

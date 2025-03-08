@@ -4,8 +4,11 @@ using UnityEngine;
 namespace Martinez
 {
 
-    public class CompareSegments : IComparer<SweepEvent>
+    public sealed class CompareSegments : IComparer<SweepEvent>
     {
+        public static readonly CompareSegments Default = new CompareSegments();
+        private CompareSegments() { }
+
         public int Compare(SweepEvent le1, SweepEvent le2)
         {
             if (le1 == le2) return 0;
