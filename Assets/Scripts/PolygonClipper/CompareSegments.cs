@@ -3,19 +3,34 @@ using UnityEngine;
 
 namespace Martinez
 {
-
+    /// <summary>
+    /// Comparer class for line segments in the sweep line algorithm.
+    /// </summary>
     public sealed class CompareSegments : IComparer<SweepEvent>
     {
+        /// <summary>
+        /// Singleton instance of the comparer.
+        /// </summary>
         public static readonly CompareSegments Default = new CompareSegments();
+
         private CompareSegments() { }
 
+        /// <summary>
+        /// Compares two line segments based on their position.
+        /// </summary>
+        /// <param name="le1">First sweep event (left endpoint).</param>
+        /// <param name="le2">Second sweep event (left endpoint).</param>
+        /// <returns>
+        /// Negative value if le1 is less than le2, zero if they are equal,
+        /// and positive value if le1 is greater than le2.
+        /// </returns>
         public int Compare(SweepEvent le1, SweepEvent le2)
         {
             if (le1 == le2) return 0;
 
             // Check if segments are collinear
             if (!Helper.IsCollinear(le1.point, le1.otherEvent.point, le2.point) ||
-              !Helper.IsCollinear(le1.point, le1.otherEvent.point, le2.otherEvent.point))
+                !Helper.IsCollinear(le1.point, le1.otherEvent.point, le2.otherEvent.point))
             {
                 // Segments are not collinear
 
@@ -38,20 +53,21 @@ namespace Martinez
             {
                 Vector2 p1 = le1.point;
                 Vector2 p2 = le2.point;
-                if (p1.x == p2.x && p1.y == p2.y/*equals(le1.point, le2.point)*/) //use exact comparison here!
+                if (p1.x == p2.x && p1.y == p2.y) // use exact comparison here!
                 {
-                    p1 = le1.otherEvent.point; p2 = le2.otherEvent.point;
-                    if (p1.x == p2.x && p1.y == p2.y) return 0; //use exact comparison here!
+                    p1 = le1.otherEvent.point;
+                    p2 = le2.otherEvent.point;
+                    if (p1.x == p2.x && p1.y == p2.y) return 0; // use exact comparison here!
                     else return le1.contourId > le2.contourId ? 1 : -1;
                 }
             }
             else
-            { // Segments are collinear, but belong to separate polygons
+            {
+                // Segments are collinear, but belong to separate polygons
                 return le1.isSubject ? -1 : 1;
             }
 
             return CompareEvents.Default.Compare(le1, le2) == 1 ? 1 : -1;
         }
-
     }
 }

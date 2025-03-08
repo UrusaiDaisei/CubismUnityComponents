@@ -7,6 +7,14 @@ namespace Martinez
 
     public partial class MartinezClipper
     {
+        /// <summary>
+        /// Subdivides segments at intersection points using a sweep line algorithm.
+        /// </summary>
+        /// <param name="eventQueue">The priority queue of sweep events.</param>
+        /// <param name="sbbox">Bounding box of the subject polygons.</param>
+        /// <param name="cbbox">Bounding box of the clipping polygons.</param>
+        /// <param name="operation">The type of Boolean operation to perform.</param>
+        /// <returns>List of sorted sweep events after subdivision.</returns>
         List<SweepEvent> subdivideSegments(MinHeap<SweepEvent> eventQueue, Rect sbbox, Rect cbbox, ClipType operation)
         {
             AVLTree<SweepEvent> sweepLine = new AVLTree<SweepEvent>(CompareSegments.Default);
@@ -19,11 +27,9 @@ namespace Martinez
             while (eventQueue.Length != 0)
             {
                 var m_event = eventQueue.Pop();
-
-
                 sortedEvents.Add(m_event);
 
-                // optimization by bboxes for intersection and difference goes here
+                // Optimization by bounding boxes for intersection and difference operations
                 if ((operation == ClipType.Intersection && m_event.point.x > rightbound) ||
                     (operation == ClipType.Difference && m_event.point.x > sbbox.xMax))
                 {
@@ -32,8 +38,8 @@ namespace Martinez
 
                 if (m_event.left)
                 {
+                    // Left endpoint of segment enters the sweep line
                     m_event.positionInSweepLine = sweepLine.Insert(m_event);
-                    //Console.WriteLine(sweepLine);
                     next = prev = m_event.positionInSweepLine;
                     begin = sweepLine.GetMinNode();
 
@@ -44,7 +50,11 @@ namespace Martinez
 
                     SweepEvent prevEvent = prev != null ? prev.Value : null;
                     SweepEvent prevprevEvent;
+
+                    // Compute fields for the current event based on the previous event
                     ComputeFields(m_event, prevEvent, operation);
+
+                    // Check for possible intersection with the next segment
                     if (next != null)
                     {
                         if (possibleIntersection(m_event, next.Value, eventQueue) == 2)
@@ -54,6 +64,7 @@ namespace Martinez
                         }
                     }
 
+                    // Check for possible intersection with the previous segment
                     if (prev != null)
                     {
                         if (possibleIntersection(prev.Value, m_event, eventQueue) == 2)
@@ -70,6 +81,7 @@ namespace Martinez
                 }
                 else
                 {
+                    // Right endpoint of segment exits the sweep line
                     m_event = m_event.otherEvent;
                     next = prev = sweepLine.Find(m_event);
 
@@ -80,8 +92,8 @@ namespace Martinez
 
                         next = next.GetSuccessor();
                         sweepLine.Remove(m_event);
-                        //Console.WriteLine(sweepLine);
 
+                        // Check for possible intersection between the segments that become adjacent
                         if (next != null && prev != null)
                             possibleIntersection(prev.Value, next.Value, eventQueue);
                     }

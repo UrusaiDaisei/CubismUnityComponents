@@ -1,19 +1,53 @@
-﻿
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace Martinez
 {
+    /// <summary>
+    /// Implementation of an AVL balanced binary search tree.
+    /// </summary>
+    /// <typeparam name="T">The type of elements in the tree.</typeparam>
     public class AVLTree<T> : ICollection<T>
     {
+        /// <summary>
+        /// Delegate for tree traversal operations.
+        /// </summary>
+        /// <param name="n">The node being visited.</param>
         public delegate void VisitHandler(AVLNode<T> n);
 
-        AVLNode<T> root;
+        /// <summary>
+        /// The root node of the tree.
+        /// </summary>
+        private AVLNode<T> root;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AVLTree{T}"/> class
+        /// using the default comparer.
+        /// </summary>
         public AVLTree() : this(Comparer<T>.Default) { }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AVLTree{T}"/> class
+        /// using the specified comparer.
+        /// </summary>
+        /// <param name="comparer">The comparer to use for element comparisons.</param>
         public AVLTree(IComparer<T> comparer) : this(Enumerable.Empty<T>(), comparer) { }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AVLTree{T}"/> class
+        /// with elements from the specified collection, using the default comparer.
+        /// </summary>
+        /// <param name="collection">The collection whose elements will be added to the tree.</param>
         public AVLTree(IEnumerable<T> collection) : this(collection, Comparer<T>.Default) { }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AVLTree{T}"/> class
+        /// with elements from the specified collection, using the specified comparer.
+        /// </summary>
+        /// <param name="collection">The collection whose elements will be added to the tree.</param>
+        /// <param name="comparer">The comparer to use for element comparisons.</param>
         public AVLTree(IEnumerable<T> collection, IComparer<T> comparer)
         {
             if (collection == null) throw new ArgumentNullException("collection");
@@ -30,18 +64,28 @@ namespace Martinez
             }
         }
 
+        /// <summary>
+        /// Gets or sets the comparer used for element comparisons.
+        /// </summary>
         protected IComparer<T> Comparer { get; set; }
 
         /// <summary>
-        /// 
-        /// Complexity: O(log n)
+        /// Adds an item to the tree.
         /// </summary>
-
+        /// <param name="value">The value to add.</param>
+        /// <remarks>
+        /// Complexity: O(log n)
+        /// </remarks>
         public void Add(T value)
         {
             Insert(value);
         }
 
+        /// <summary>
+        /// Inserts an item into the tree.
+        /// </summary>
+        /// <param name="value">The value to insert.</param>
+        /// <returns>The node containing the inserted value.</returns>
         public AVLNode<T> Insert(T value)
         {
             AVLNode<T> result = null;
@@ -52,10 +96,13 @@ namespace Martinez
         }
 
         /// <summary>
-        /// 
-        /// Complexity: O(log n)
+        /// Removes a specified item from the tree.
         /// </summary>
-
+        /// <param name="value">The value to remove.</param>
+        /// <returns>True if the item was found and removed; otherwise, false.</returns>
+        /// <remarks>
+        /// Complexity: O(log n)
+        /// </remarks>
         public bool Remove(T value)
         {
             bool foundElement = false;
@@ -65,6 +112,11 @@ namespace Martinez
             return foundElement;
         }
 
+        /// <summary>
+        /// Removes the node at the specified position in the tree.
+        /// </summary>
+        /// <param name="node">The node to remove.</param>
+        /// <returns>True if the node was successfully removed; otherwise, false.</returns>
         public bool RemoveAt(AVLNode<T> node)
         {
             if (node == null) return false;
@@ -105,6 +157,11 @@ namespace Martinez
             }
         }
 
+        /// <summary>
+        /// Swaps two nodes in the tree, maintaining all links.
+        /// </summary>
+        /// <param name="a">First node to swap.</param>
+        /// <param name="b">Second node to swap.</param>
         void Swap(AVLNode<T> a, AVLNode<T> b)
         {
             if (a == null || b == null) return;
@@ -154,10 +211,12 @@ namespace Martinez
         }
 
         /// <summary>
-        /// 
-        /// Complexity: O(log n)
+        /// Gets the minimum value in the tree.
         /// </summary>
-
+        /// <returns>The minimum value, or default(T) if the tree is empty.</returns>
+        /// <remarks>
+        /// Complexity: O(log n)
+        /// </remarks>
         public T GetMin()
         {
             AVLNode<T> result = GetMinNode();
@@ -165,15 +224,23 @@ namespace Martinez
             return result != null ? result.Value : default(T);
         }
 
+        /// <summary>
+        /// Gets the node containing the minimum value in the tree.
+        /// </summary>
+        /// <returns>The node with the minimum value, or null if the tree is empty.</returns>
         public AVLNode<T> GetMinNode()
         {
             return root != null ? root.GetFarLeft() : null;
         }
 
         /// <summary>
-        /// 
-        /// Complexity: O(log n)
+        /// Gets the maximum value in the tree.
         /// </summary>
+        /// <param name="value">When this method returns, contains the maximum value if found; otherwise, the default value for type T.</param>
+        /// <returns>True if the maximum value was found; otherwise, false.</returns>
+        /// <remarks>
+        /// Complexity: O(log n)
+        /// </remarks>
         public bool GetMax(out T value)
         {
             if (root != null)
@@ -188,10 +255,13 @@ namespace Martinez
             return false;
         }
 
-        // <summary>
-        /// 
-        /// Complexity: O(log n)
+        /// <summary>
+        /// Gets the value at the root of the tree.
         /// </summary>
+        /// <returns>The value of the root node, or default(T) if the tree is empty.</returns>
+        /// <remarks>
+        /// Complexity: O(1)
+        /// </remarks>
         public T GetRoot()
         {
             var value = default(T);
@@ -202,11 +272,19 @@ namespace Martinez
             return value;
         }
 
+        /// <summary>
+        /// Traverses the tree in-order, calling the specified visitor function for each node.
+        /// </summary>
+        /// <param name="visitor">The function to call for each node.</param>
         public void Traverse(VisitHandler visitor)
         {
             if (root != null && visitor != null) InOrder(root, visitor);
         }
 
+        /// <summary>
+        /// Returns a string representation of the tree structure.
+        /// </summary>
+        /// <returns>A formatted string showing the tree hierarchy.</returns>
         public override string ToString()
         {
             string result = "";
@@ -251,6 +329,11 @@ namespace Martinez
             return result;
         }
 
+        /// <summary>
+        /// Performs an in-order traversal of the tree, calling the visitor function for each node.
+        /// </summary>
+        /// <param name="node">The node to start the traversal from.</param>
+        /// <param name="visitor">The function to call for each node.</param>
         void InOrder(AVLNode<T> node, VisitHandler visitor)
         {
             if (node.Left != null) InOrder(node.Left, visitor);
@@ -260,6 +343,11 @@ namespace Martinez
             if (node.Right != null) InOrder(node.Right, visitor);
         }
 
+        /// <summary>
+        /// Performs a pre-order traversal of the tree, calling the visitor function for each node.
+        /// </summary>
+        /// <param name="node">The node to start the traversal from.</param>
+        /// <param name="visitor">The function to call for each node.</param>
         void PreOrder(AVLNode<T> node, VisitHandler visitor)
         {
             visitor(node);
@@ -268,6 +356,11 @@ namespace Martinez
             if (node.Right != null) PreOrder(node.Right, visitor);
         }
 
+        /// <summary>
+        /// Performs a post-order traversal of the tree, calling the visitor function for each node.
+        /// </summary>
+        /// <param name="node">The node to start the traversal from.</param>
+        /// <param name="visitor">The function to call for each node.</param>
         void PostOrder(AVLNode<T> node, VisitHandler visitor)
         {
             if (node.Left != null) PreOrder(node.Left, visitor);
@@ -277,25 +370,40 @@ namespace Martinez
         }
 
         /// <summary>
-        /// 
-        /// Complexity: O(log n)
+        /// Determines whether the tree contains a specific value.
         /// </summary>
+        /// <param name="arg">The value to locate in the tree.</param>
+        /// <returns>True if the tree contains the specified value; otherwise, false.</returns>
+        /// <remarks>
+        /// Complexity: O(log n)
+        /// </remarks>
         public bool Contains(T arg)
         {
             return Find(arg) != null;
         }
 
         /// <summary>
-        /// 
-        /// Complexity: O(1).
+        /// Removes all elements from the tree.
         /// </summary>
+        /// <remarks>
+        /// Complexity: O(1)
+        /// </remarks>
         public void Clear()
         {
             root = null;
         }
 
+        /// <summary>
+        /// Gets a value indicating whether the tree is read-only.
+        /// </summary>
         public bool IsReadOnly { get { return false; } }
 
+        /// <summary>
+        /// Gets the number of elements contained in the tree.
+        /// </summary>
+        /// <remarks>
+        /// This is an expensive operation as it traverses the entire tree.
+        /// </remarks>
         public int Count
         {
             get
@@ -308,6 +416,11 @@ namespace Martinez
             }
         }
 
+        /// <summary>
+        /// Copies the elements of the tree to an array, starting at a particular array index.
+        /// </summary>
+        /// <param name="array">The one-dimensional array that is the destination of the elements.</param>
+        /// <param name="arrayIndex">The zero-based index in array at which copying begins.</param>
         public void CopyTo(T[] array, int arrayIndex)
         {
             IEnumerator<T> enumerator = GetEnumerator();
@@ -318,6 +431,11 @@ namespace Martinez
             }
         }
 
+        /// <summary>
+        /// Determines the height of a node in the tree.
+        /// </summary>
+        /// <param name="node">The node to check.</param>
+        /// <returns>The height of the node, or 0 if the node is null.</returns>
         static int DetermineHeight(AVLNode<T> node)
         {
             if (node == null) return 0;
@@ -325,6 +443,11 @@ namespace Martinez
             return node.Height;
         }
 
+        /// <summary>
+        /// Calculates the balance factor of a node in the tree.
+        /// </summary>
+        /// <param name="node">The node to check.</param>
+        /// <returns>The balance factor (difference between left and right subtree heights).</returns>
         static int CalculateBalance(AVLNode<T> node)
         {
             if (node == null) return 0;
@@ -332,6 +455,11 @@ namespace Martinez
             return DetermineHeight(node.Left) - DetermineHeight(node.Right);
         }
 
+        /// <summary>
+        /// Balances a node based on its balance factor.
+        /// </summary>
+        /// <param name="node">The node to balance.</param>
+        /// <returns>The new root node after balancing.</returns>
         AVLNode<T> BalanceBasedOnBalance(AVLNode<T> node)
         {
             if (node == null) return null;
@@ -358,9 +486,15 @@ namespace Martinez
             return node;
         }
 
+        /// <summary>
+        /// Balances a node based on the value being inserted.
+        /// </summary>
+        /// <param name="node">The node to balance.</param>
+        /// <param name="value">The value being inserted.</param>
+        /// <returns>The new root node after balancing.</returns>
         AVLNode<T> BalanceBasedOnValue(AVLNode<T> node, T value)
         {
-            //if (node == null) return null;
+            // if (node == null) return null;
 
             node.Height = Math.Max(DetermineHeight(node.Left), DetermineHeight(node.Right)) + 1;
 
@@ -384,6 +518,11 @@ namespace Martinez
             return node;
         }
 
+        /// <summary>
+        /// Updates the height of a node and all its ancestors up to a specified parent.
+        /// </summary>
+        /// <param name="node">The node to start updating from.</param>
+        /// <param name="parent">The parent node to stop at (not including).</param>
         void UpdateHeight(AVLNode<T> node, AVLNode<T> parent)
         {
             if (node != parent)
@@ -394,6 +533,13 @@ namespace Martinez
             }
         }
 
+        /// <summary>
+        /// Recursively adds a value to the tree.
+        /// </summary>
+        /// <param name="node">The current node in the recursive process.</param>
+        /// <param name="value">The value to add.</param>
+        /// <param name="result">Output parameter that will contain the newly created node.</param>
+        /// <returns>The new root of the subtree after adding the value and balancing.</returns>
         AVLNode<T> Add(AVLNode<T> node, T value, out AVLNode<T> result)
         {
             if (node == null)
@@ -416,6 +562,13 @@ namespace Martinez
             return BalanceBasedOnValue(node, value);
         }
 
+        /// <summary>
+        /// Recursively removes a value from the tree.
+        /// </summary>
+        /// <param name="node">The current node in the recursive process.</param>
+        /// <param name="value">The value to remove.</param>
+        /// <param name="wasFound">Output parameter that will be set to true if the value was found and removed.</param>
+        /// <returns>The new root of the subtree after removing the value and balancing.</returns>
         AVLNode<T> Remove(AVLNode<T> node, T value, ref bool wasFound)
         {
             if (node == null) return null;
@@ -446,6 +599,11 @@ namespace Martinez
             return BalanceBasedOnBalance(node);
         }
 
+        /// <summary>
+        /// Finds a node with the specified value in the tree.
+        /// </summary>
+        /// <param name="value">The value to search for.</param>
+        /// <returns>The node containing the value, or null if the value is not found.</returns>
         public AVLNode<T> Find(T value)
         {
             AVLNode<T> current = root;
@@ -460,6 +618,11 @@ namespace Martinez
             return null;
         }
 
+        /// <summary>
+        /// Performs a left rotation on the specified node.
+        /// </summary>
+        /// <param name="node">The node to rotate.</param>
+        /// <returns>The new root node after rotation.</returns>
         static AVLNode<T> RotateLeft(AVLNode<T> node)
         {
             AVLNode<T> right = node.Right;
@@ -487,6 +650,11 @@ namespace Martinez
             return right;
         }
 
+        /// <summary>
+        /// Performs a right rotation on the specified node.
+        /// </summary>
+        /// <param name="node">The node to rotate.</param>
+        /// <returns>The new root node after rotation.</returns>
         static AVLNode<T> RotateRight(AVLNode<T> node)
         {
             AVLNode<T> left = node.Left;
@@ -512,23 +680,42 @@ namespace Martinez
             return left;
         }
 
+        /// <summary>
+        /// Returns an enumerator that iterates through the tree in order.
+        /// </summary>
+        /// <returns>An enumerator that can be used to iterate through the tree.</returns>
         public IEnumerator<T> GetEnumerator() { return new AVLNodeEnumerator(this); }
+
+        /// <summary>
+        /// Returns an enumerator that iterates through the tree in order.
+        /// </summary>
+        /// <returns>An enumerator that can be used to iterate through the tree.</returns>
         IEnumerator IEnumerable.GetEnumerator() { return GetEnumerator(); }
 
+        /// <summary>
+        /// Enumerator class for traversing the AVL tree in-order.
+        /// </summary>
         class AVLNodeEnumerator : IEnumerator<T>
         {
-            AVLTree<T> container = null;
-            AVLNode<T> currentPosition = null;
+            private AVLTree<T> container = null;
+            private AVLNode<T> currentPosition = null;
+            private bool isReset = true;
 
-            bool isReset = true;
-
+            /// <summary>
+            /// Initializes a new instance of the <see cref="AVLNodeEnumerator"/> class.
+            /// </summary>
+            /// <param name="container">The tree to enumerate.</param>
             public AVLNodeEnumerator(AVLTree<T> container)
             {
                 this.container = container;
-
                 Reset();
             }
 
+            /// <summary>
+            /// Advances the enumerator to the next element in the tree.
+            /// </summary>
+            /// <returns>True if the enumerator was successfully advanced to the next element; 
+            /// false if the enumerator has passed the end of the tree.</returns>
             public bool MoveNext()
             {
                 if (!isReset && currentPosition == null) return false;
@@ -541,13 +728,22 @@ namespace Martinez
                 return (currentPosition != null);
             }
 
+            /// <summary>
+            /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+            /// </summary>
             void IDisposable.Dispose() { }
 
+            /// <summary>
+            /// Sets the enumerator to its initial position, which is before the first element in the tree.
+            /// </summary>
             public void Reset()
             {
                 isReset = true;
             }
 
+            /// <summary>
+            /// Gets the element in the tree at the current position of the enumerator.
+            /// </summary>
             object IEnumerator.Current
             {
                 get
@@ -556,6 +752,9 @@ namespace Martinez
                 }
             }
 
+            /// <summary>
+            /// Gets the element in the tree at the current position of the enumerator.
+            /// </summary>
             public T Current
             {
                 get
@@ -572,7 +771,6 @@ namespace Martinez
             }
         }
     }
-
 }
 
 

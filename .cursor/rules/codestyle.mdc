@@ -1,7 +1,7 @@
 ---
-description: Global code style guidelines that must be followed whenever handling any source code file
+description: Code style guidelines that must always be followed
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 # General code guidelines and best practices
 - Codebase and technical documentations should alway be in english.
@@ -27,54 +27,6 @@ alwaysApply: false
 - [ ] Does each function have a single, clear responsibility?
 - [ ] Are there nested conditionals that could be extracted into helper functions?
 - [ ] Are there repeated code blocks that could be extracted into reusable functions?
-
-# Unity Code Guidelines
-## Components and Monobehaviours
-Split the code in the following regions, other regions and sub regions might exist as adequate:
-    - Fields (optional)
-        - Public and serializable fields that are visible in the editor
-    - Runtime (optional)
-        - Runtime fields that aren't visible in the editor
-    - Unity Methods (optional)
-        - Unity specific callbacks
-    - Public Methods and Structs (optional)
-        - Public methods and classes/structs
-    - Internal Methods and Structs (optional)
-        - Internal/protected methods and classes/structs
-        - Explicit interface implementations
-    - Auxiliary Code (optional)
-        - Private methods and classes/structs
-
-## Custom Editors, Windows, and Inspectors
-### Split the code in the following regions:
-    - UI Constants (optional)
-        - private constants and readonly static variables to configure UI styling
-    - Runtime (optional)
-        - Runtime variables and properties for the editor
-    - Unity Methods (optional)
-        - Unity specific callbacks
-    - UI Logic (optional)
-        - UI methods and logic responsible for rendering custom UI
-    - Scene View Logic (optional)
-        - UI methods and logic responsible for rendering custom Scene View UI
-    - Auxiliary Code (optional)
-        - Private methods and classes/structs
-
-### Styling best practices
-If the editor code contains styling data and method, they should be declared within a static nested "Style" private class. This helps keep the code more organized.
-If the code requires multipe styles (eg. One for the inspect, another for scene view UI, another for internal windows, etc.), then each style should have its own class.
-
-# Language-Specific Guidelines
-
-## C# Guidelines
-- Use PascalCase for class names, public properties, and methods
-- Use camelCase for private fields (prefix with _)
-- Use `readonly` where applicable
-- Prefer expression-bodied members for simple methods
-- Use uppercase snake_case for class level constants
-- Classes should always be sealed by default
-- Each region start/end should have a whiteline space between it, the code
-- Slways prefer the `var` type for local variables, instead explicit variable types
 
 # Formatting
 

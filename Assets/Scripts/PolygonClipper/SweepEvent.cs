@@ -2,31 +2,85 @@
 
 namespace Martinez
 {
+    /// <summary>
+    /// Represents an event in the sweep line algorithm used for polygon clipping.
+    /// </summary>
     public class SweepEvent
     {
+        /// <summary>
+        /// Position of this event in the sweep line data structure.
+        /// </summary>
         public AVLNode<SweepEvent> positionInSweepLine;
+
+        /// <summary>
+        /// The 2D point associated with this event.
+        /// </summary>
         public Vector2 point;
-        public bool left;                       // Is left endpoint?
-        public SweepEvent otherEvent;           // Other edge reference
-        public bool isSubject;                  //Belongs to source or clipping polygon
-        public EdgeType type;               //Edge contribution type       
-        public bool inOut;                      //In-out transition for the sweepline crossing polygon
-        public bool otherInOut;                 // a vertical ray from (p.x, -infinite) that crosses the edge
-        public SweepEvent prevInResult;         //Previous event in result?
-        public int resultTransition;            //Type of result transition (0 = not in result, +1 = out-in, -1, in-out)
-        public bool inside;                     // Is the edge inside of another polygon
+
+        /// <summary>
+        /// Indicates whether this event represents the left endpoint of a segment.
+        /// </summary>
+        public bool left;
+
+        /// <summary>
+        /// Reference to the corresponding event at the other end of the segment.
+        /// </summary>
+        public SweepEvent otherEvent;
+
+        /// <summary>
+        /// Indicates whether this event belongs to the subject polygon (true) or the clipping polygon (false).
+        /// </summary>
+        public bool isSubject;
+
+        /// <summary>
+        /// The type of edge contribution to the result.
+        /// </summary>
+        public EdgeType type;
+
+        /// <summary>
+        /// In-out transition flag for the sweepline crossing the polygon.
+        /// </summary>
+        public bool inOut;
+
+        /// <summary>
+        /// In-out transition flag for a vertical ray from (p.x, -infinite) that crosses the edge.
+        /// </summary>
+        public bool otherInOut;
+
+        /// <summary>
+        /// Reference to the previous event in the result.
+        /// </summary>
+        public SweepEvent prevInResult;
+
+        /// <summary>
+        /// Type of result transition (0 = not in result, +1 = out-in, -1 = in-out).
+        /// </summary>
+        public int resultTransition;
+
+        /// <summary>
+        /// Indicates whether the edge is inside of another polygon.
+        /// </summary>
+        public bool inside;
+
+        /// <summary>
+        /// Position index of the other event.
+        /// </summary>
         public int otherPos;
+
+        /// <summary>
+        /// ID of the contour this event belongs to.
+        /// </summary>
         public int contourId;
 
         /// <summary>
-        /// Sweepline event
+        /// Initializes a new sweep event.
         /// </summary>
-        /// <param name="point"></param>
-        /// <param name="left"></param>
-        /// <param name="otherEvent"></param>
-        /// <param name="isSubject"></param>
-        /// <param name="edgeType"></param>
-        public SweepEvent(Vector2 point, bool left, SweepEvent otherEvent, bool isSubject, EdgeType edgeType = EdgeType.NORMAL)
+        /// <param name="point">The 2D point associated with this event.</param>
+        /// <param name="left">Indicates whether this is a left endpoint.</param>
+        /// <param name="otherEvent">Reference to the corresponding event at the other end of the segment.</param>
+        /// <param name="isSubject">Indicates whether this event belongs to the subject polygon.</param>
+        /// <param name="edgeType">The type of edge contribution.</param>
+        public SweepEvent(Vector2 point, bool left, SweepEvent otherEvent, bool isSubject, EdgeType edgeType = EdgeType.Normal)
         {
             this.point = point;
             this.left = left;
@@ -42,21 +96,40 @@ namespace Martinez
             this.positionInSweepLine = null;
         }
 
+        /// <summary>
+        /// Determines if the edge this event belongs to is below a given point.
+        /// </summary>
+        /// <param name="p">The reference point.</param>
+        /// <returns>True if the edge is below the point; otherwise, false.</returns>
         public bool IsBelow(Vector2 p)
         {
             return left
                 ? Helper.crossProduct(point - p, otherEvent.point - p) > 0  // Direct cross product check
                 : Helper.crossProduct(otherEvent.point - p, point - p) > 0; // Direct cross product check
         }
+
+        /// <summary>
+        /// Determines if the edge this event belongs to is above a given point.
+        /// </summary>
+        /// <param name="p">The reference point.</param>
+        /// <returns>True if the edge is above the point; otherwise, false.</returns>
         public bool IsAbove(Vector2 p)
         {
             return !IsBelow(p);
         }
+
+        /// <summary>
+        /// Determines if the segment this event belongs to is vertical.
+        /// </summary>
+        /// <returns>True if the segment is vertical; otherwise, false.</returns>
         public bool IsVertical()
         {
             return Mathf.Approximately(point.x, otherEvent.point.x);
         }
-        // Does event belong to result?
+
+        /// <summary>
+        /// Gets whether this event belongs to the result.
+        /// </summary>
         public bool inResult
         {
             get { return resultTransition != 0; }

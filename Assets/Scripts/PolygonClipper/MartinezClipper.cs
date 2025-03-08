@@ -3,8 +3,20 @@ using UnityEngine;
 
 namespace Martinez
 {
+    /// <summary>
+    /// Implementation of the Martinez-Rueda-Feito polygon clipping algorithm.
+    /// This class provides methods to compute Boolean operations (union, intersection, difference, XOR)
+    /// between two sets of polygons.
+    /// </summary>
     public partial class MartinezClipper
     {
+        /// <summary>
+        /// Performs a trivial operation check for cases where one or both polygon lists are empty.
+        /// </summary>
+        /// <param name="subject">List of subject polygons.</param>
+        /// <param name="clipping">List of clipping polygons.</param>
+        /// <param name="operation">The type of Boolean operation to perform.</param>
+        /// <returns>Result polygons if a trivial operation was performed, otherwise null.</returns>
         List<Polygon> trivialOperation(List<Polygon> subject, List<Polygon> clipping, ClipType operation)
         {
             List<Polygon> result = null;
@@ -19,6 +31,16 @@ namespace Martinez
             }
             return result;
         }
+
+        /// <summary>
+        /// Compares bounding boxes of subject and clipping polygons to perform a quick check.
+        /// </summary>
+        /// <param name="subject">List of subject polygons.</param>
+        /// <param name="clipping">List of clipping polygons.</param>
+        /// <param name="sbbox">Bounding box of the subject polygons.</param>
+        /// <param name="cbbox">Bounding box of the clipping polygons.</param>
+        /// <param name="operation">The type of Boolean operation to perform.</param>
+        /// <returns>Result polygons if determined from bounding box check, otherwise null.</returns>
         List<Polygon> compareBBoxes(List<Polygon> subject, List<Polygon> clipping, Rect sbbox, Rect cbbox, ClipType operation)
         {
             List<Polygon> result = null;
@@ -36,6 +58,14 @@ namespace Martinez
             }
             return result;
         }
+
+        /// <summary>
+        /// Computes a Boolean operation between two sets of polygons.
+        /// </summary>
+        /// <param name="subject">List of subject polygons.</param>
+        /// <param name="clipping">List of clipping polygons.</param>
+        /// <param name="operation">The type of Boolean operation to perform.</param>
+        /// <returns>The resulting list of polygons after applying the operation.</returns>
         public List<Polygon> Compute(List<Polygon> subject, List<Polygon> clipping, ClipType operation)
         {
             List<Polygon> trivial = trivialOperation(subject, clipping, operation);
@@ -55,7 +85,7 @@ namespace Martinez
             List<Contour> contours = connectEdges(sortedEvents);
 
             // Convert contours to polygons
-            List<Polygon> polygons = new List<Polygon>(); //outer List: List of PolygonSets
+            List<Polygon> polygons = new List<Polygon>(); // outer List: List of PolygonSets
             for (int i = 0; i < contours.Count; i++)
             {
                 Contour contour = contours[i];
@@ -92,12 +122,11 @@ namespace Martinez
                                 rings.nodes.Add(hole.points[k]);
                         }
                     }
-                    rings.AddComponent();//abuse last StartID to store end of last component
+                    rings.AddComponent(); // abuse last StartID to store end of last component
                     polygons.Add(rings);
                 }
             }
             return polygons;
         }
-
     }
 }
