@@ -15,7 +15,7 @@ namespace Martinez
         /// <param name="cbbox">Bounding box of the clipping polygons.</param>
         /// <param name="operation">The type of Boolean operation to perform.</param>
         /// <returns>List of sorted sweep events after subdivision.</returns>
-        List<SweepEvent> subdivideSegments(MinHeap<SweepEvent> eventQueue, Rect sbbox, Rect cbbox, ClipType operation)
+        List<SweepEvent> SubdivideSegments(MinHeap<SweepEvent> eventQueue, Rect sbbox, Rect cbbox, ClipType operation)
         {
             AVLTree<SweepEvent> sweepLine = new AVLTree<SweepEvent>(CompareSegments.Default);
             List<SweepEvent> sortedEvents = new List<SweepEvent>();

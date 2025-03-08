@@ -51,14 +51,12 @@ namespace Martinez
 
             if (le1.isSubject == le2.isSubject) // same polygon
             {
-                Vector2 p1 = le1.point;
-                Vector2 p2 = le2.point;
-                if (p1.x == p2.x && p1.y == p2.y) // use exact comparison here!
+                if (Helper.Approximately(le1.point, le2.point))
                 {
-                    p1 = le1.otherEvent.point;
-                    p2 = le2.otherEvent.point;
-                    if (p1.x == p2.x && p1.y == p2.y) return 0; // use exact comparison here!
-                    else return le1.contourId > le2.contourId ? 1 : -1;
+                    if (Helper.Approximately(le1.otherEvent.point, le2.otherEvent.point))
+                        return 0;
+
+                    return le1.contourId > le2.contourId ? 1 : -1;
                 }
             }
             else

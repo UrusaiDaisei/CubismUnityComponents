@@ -57,7 +57,7 @@ namespace Martinez
         /// <param name="cbbox">Output parameter for the clipping polygons' bounding box.</param>
         /// <param name="operation">The type of Boolean operation to perform.</param>
         /// <returns>A priority queue containing all sweep events.</returns>
-        MinHeap<SweepEvent> fillQueue(List<Polygon> subject, List<Polygon> clipping, ref Rect sbbox, ref Rect cbbox, ClipType operation)
+        MinHeap<SweepEvent> FillQueue(List<Polygon> subject, List<Polygon> clipping, ref Rect sbbox, ref Rect cbbox, ClipType operation)
         {
             int contourId = 0;
             MinHeap<SweepEvent> eventQueue = new MinHeap<SweepEvent>(CompareEvents.Default);

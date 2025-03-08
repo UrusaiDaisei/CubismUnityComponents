@@ -171,7 +171,7 @@ namespace Martinez
         /// </summary>
         /// <param name="sortedEvents">List of sorted sweep events.</param>
         /// <returns>List of contours representing the result polygons.</returns>
-        List<Contour> connectEdges(List<SweepEvent> sortedEvents)
+        List<Contour> ConnectEdges(List<SweepEvent> sortedEvents)
         {
             int i, len;
             List<SweepEvent> resultEvents = orderEvents(sortedEvents);
