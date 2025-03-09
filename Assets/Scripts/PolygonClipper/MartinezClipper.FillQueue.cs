@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -14,17 +15,14 @@ namespace Martinez
         /// <param name="depth">The depth/contour ID of the polygon.</param>
         /// <param name="Q">Priority queue to store the created events.</param>
         /// <param name="bbox">Bounding box to be updated with the extents of this polygon.</param>
-        void processPolygon(List<Vector2> contourOrHole, bool isSubject, int depth, ref MinHeap<SweepEvent> Q, ref Rect bbox)
+        static void ProcessPolygon(Span<Vector2> contourOrHole, bool isSubject, int depth, ref MinHeap<SweepEvent> Q, ref Rect bbox)
         {
-            int i, len;
-            Vector2 s1, s2;
-            SweepEvent e1, e2;
-            for (i = 0, len = contourOrHole.Count - 1; i < len; i++)
+            for (int i = 0, len = contourOrHole.Length - 1; i < len; i++)
             {
-                s1 = contourOrHole[i];
-                s2 = contourOrHole[i + 1];
-                e1 = new SweepEvent(s1, false, null, isSubject);
-                e2 = new SweepEvent(s2, false, e1, isSubject);
+                var s1 = contourOrHole[i];
+                var s2 = contourOrHole[i + 1];
+                var e1 = new SweepEvent(s1, false, null, isSubject);
+                var e2 = new SweepEvent(s2, false, e1, isSubject);
                 e1.otherEvent = e2;
 
                 // Skip collapsed edges, or it breaks
@@ -59,51 +57,48 @@ namespace Martinez
         /// <returns>A priority queue containing all sweep events.</returns>
         MinHeap<SweepEvent> FillQueue(List<Polygon> subject, List<Polygon> clipping, ref Rect sbbox, ref Rect cbbox, ClipType operation)
         {
-            int contourId = 0;
             MinHeap<SweepEvent> eventQueue = new MinHeap<SweepEvent>(CompareEvents.Default);
-            Polygon polygonSet;
-            bool isExteriorRing;
-            int i, ii, j, jj, k;
 
             // Process subject polygons
-            for (i = 0, ii = subject.Count; i < ii; i++)
-            {
-                polygonSet = subject[i];
-                for (j = 0, jj = polygonSet.startIDs.Count - 1; j < jj; j++)
-                {
-                    isExteriorRing = j == 0;
-                    if (isExteriorRing) contourId++;
-                    int start = polygonSet.startIDs[j];
-                    int end = polygonSet.startIDs[j + 1];
-                    List<Vector2> component = new List<Vector2>();
-                    for (k = start; k < end; k++)
-                        component.Add(polygonSet.nodes[k]);
-                    // Close the ring so intersection between end and start are detected
-                    component.Add(polygonSet.nodes[start]);
-                    processPolygon(component, true, contourId, ref eventQueue, ref sbbox);
-                }
-            }
+            var contourId = processPolygonList(subject, true, 0, ref eventQueue, ref sbbox, operation);
 
             // Process clipping polygons
-            for (i = 0, ii = clipping.Count; i < ii; i++)
-            {
-                polygonSet = clipping[i];
-                for (j = 0, jj = polygonSet.startIDs.Count - 1; j < jj; j++)
-                {
-                    isExteriorRing = j == 0;
-                    if (operation == ClipType.Difference) isExteriorRing = false;
-                    if (isExteriorRing) contourId++;
-                    int start = polygonSet.startIDs[j];
-                    int end = polygonSet.startIDs[j + 1];
-                    List<Vector2> component = new List<Vector2>();
-                    for (k = start; k < end; k++)
-                        component.Add(polygonSet.nodes[k]);
-                    // Close the ring so intersection between end and start are detected
-                    component.Add(polygonSet.nodes[start]);
-                    processPolygon(component, false, contourId, ref eventQueue, ref cbbox);
-                }
-            }
+            processPolygonList(clipping, false, contourId, ref eventQueue, ref cbbox, operation);
+
             return eventQueue;
+
+            // Local function to process polygon lists
+            static int processPolygonList(List<Polygon> polygons, bool isSubject, int contourId,
+                ref MinHeap<SweepEvent> eventQueue, ref Rect bbox, ClipType operation)
+            {
+                for (int i = 0; i < polygons.Count; i++)
+                {
+                    var polygonSet = polygons[i];
+                    for (int j = 0; j < polygonSet.startIDs.Count - 1; j++)
+                    {
+                        bool isExteriorRing = j == 0;
+                        if (!isSubject && operation == ClipType.Difference)
+                            isExteriorRing = false;
+
+                        if (isExteriorRing)
+                            contourId++;
+                        int start = polygonSet.startIDs[j];
+                        int end = polygonSet.startIDs[j + 1];
+
+                        var maxSize = end - start + 1;
+                        var rentedArray = ArrayPool<Vector2>.Shared.Rent(maxSize);
+                        //var component = rentedArray.AsSpan(0, maxSize);
+                        polygonSet.nodes.CopyTo(start, rentedArray, 0, end - start);
+                        // Close the ring so intersection between end and start are detected
+                        rentedArray[maxSize - 1] = polygonSet.nodes[start];
+                        var component = rentedArray.AsSpan(0, maxSize);
+                        ProcessPolygon(component, isSubject, contourId, ref eventQueue, ref bbox);
+                        ArrayPool<Vector2>.Shared.Return(rentedArray);
+                    }
+                }
+
+                return contourId;
+            }
         }
     }
 }

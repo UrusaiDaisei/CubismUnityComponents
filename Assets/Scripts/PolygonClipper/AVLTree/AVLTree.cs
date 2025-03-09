@@ -94,8 +94,7 @@ namespace Martinez
         /// </remarks>
         public bool Remove(T value)
         {
-            var foundElement = false;
-            _root = Remove(_root, value, ref foundElement);
+            _root = RemoveNode(_root, value, out var foundElement);
             if (foundElement)
                 Count--; // Decrement count when a node is removed
             return foundElement;
@@ -471,22 +470,32 @@ namespace Martinez
         /// <param name="value">The value to remove.</param>
         /// <param name="wasFound">Output parameter that will be set to true if the value was found and removed.</param>
         /// <returns>The new root of the subtree after removing the value and balancing.</returns>
-        private Node Remove(Node node, T value, ref bool wasFound)
+        private Node RemoveNode(Node node, T value, out bool wasFound)
         {
-            if (node == null) return null;
+            if (node == null)
+            {
+                wasFound = false;
+                return null;
+            }
 
-            if (_comparer.Compare(value, node.Value) < 0) node.Left = Remove(node.Left, value, ref wasFound);
-            else if (_comparer.Compare(value, node.Value) > 0) node.Right = Remove(node.Right, value, ref wasFound);
+            var compareResult = _comparer.Compare(value, node.Value);
+            if (compareResult < 0)
+                node.Left = RemoveNode(node.Left, value, out wasFound);
+            else if (compareResult > 0)
+                node.Right = RemoveNode(node.Right, value, out wasFound);
             else
             {
                 if (node.Left == null || node.Right == null)
                 {
                     Node oldParent = node.Parent;
 
-                    if (node.Left == null) node = node.Right;
-                    else node = node.Left;
+                    if (node.Left == null)
+                        node = node.Right;
+                    else
+                        node = node.Left;
 
-                    if (node != null) node.Parent = oldParent;
+                    if (node != null)
+                        node.Parent = oldParent;
 
                     wasFound = true;
                 }
@@ -494,7 +503,7 @@ namespace Martinez
                 {
                     Node rightMin = node.Right.GetFarLeft();
                     node.Value = rightMin.Value;
-                    node.Right = Remove(node.Right, rightMin.Value, ref wasFound);
+                    node.Right = RemoveNode(node.Right, rightMin.Value, out wasFound);
                 }
             }
 
