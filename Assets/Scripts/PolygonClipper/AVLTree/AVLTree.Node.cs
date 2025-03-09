@@ -2,11 +2,19 @@ namespace Martinez
 {
     partial class AVLTree<T>
     {
+        public interface INode
+        {
+            T Value { get; }
+
+            INode GetPredecessor();
+            INode GetSuccessor();
+        }
+
         /// <summary>
         /// Represents a node in an AVL balanced binary search tree.
         /// </summary>
         /// <typeparam name="T">The type of value stored in the node.</typeparam>
-        public sealed class Node
+        private sealed class Node : INode
         {
             /// <summary>
             /// Gets or sets the left child node.
@@ -52,46 +60,32 @@ namespace Martinez
             /// Gets the predecessor node (the node with the greatest value that's smaller than this node's value).
             /// </summary>
             /// <returns>The predecessor node, or null if there is no predecessor.</returns>
-            public Node GetPredecessor()
+            public INode GetPredecessor()
             {
                 if (Left != null)
-                {
                     return Left.GetFarRight();
-                }
-                else
-                {
-                    var p = this;
 
-                    while (p.Parent != null && p.Parent.Left == p)
-                    {
-                        p = p.Parent;
-                    }
+                var p = this;
 
-                    return p.Parent;
-                }
+                while (p.Parent != null && p.Parent.Left == p)
+                    p = p.Parent;
+
+                return p.Parent;
             }
 
             /// <summary>
             /// Gets the successor node (the node with the smallest value that's greater than this node's value).
             /// </summary>
             /// <returns>The successor node, or null if there is no successor.</returns>
-            public Node GetSuccessor()
+            public INode GetSuccessor()
             {
                 if (Right != null)
-                {
                     return Right.GetFarLeft();
-                }
-                else
-                {
-                    var p = this;
 
-                    while (p.Parent != null && p.Parent.Right == p)
-                    {
-                        p = p.Parent;
-                    }
-
-                    return p.Parent;
-                }
+                var p = this;
+                while (p.Parent != null && p.Parent.Right == p)
+                    p = p.Parent;
+                return p.Parent;
             }
 
             /// <summary>

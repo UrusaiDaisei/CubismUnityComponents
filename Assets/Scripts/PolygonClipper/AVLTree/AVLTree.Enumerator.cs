@@ -12,7 +12,7 @@ namespace Martinez
         internal sealed class Enumerator : IEnumerator<T>
         {
             private AVLTree<T> _container = null;
-            private Node _currentPosition = null;
+            private INode _currentPosition = null;
             private bool _isReset = true;
 
             /// <summary>

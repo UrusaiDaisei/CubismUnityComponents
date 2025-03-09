@@ -77,7 +77,7 @@ namespace Martinez
         /// </summary>
         /// <param name="value">The value to insert.</param>
         /// <returns>The node containing the inserted value.</returns>
-        public Node Add(T value)
+        public INode Add(T value)
         {
             _root = Add(_root, value, out var result);
             Count++; // Increment count when adding a node
@@ -105,17 +105,19 @@ namespace Martinez
         /// </summary>
         /// <param name="node">The node to remove.</param>
         /// <returns>True if the node was successfully removed; otherwise, false.</returns>
-        public bool Remove(Node node)
+        public bool Remove(INode node)
         {
             if (node == null)
                 return false;
 
-            if (node.Left == null || node.Right == null)
-                return RemoveNodeWithFewerThanTwoChildren(node);
+            var wrappedNode = (Node)node;
 
-            var rightMin = node.Right.GetFarLeft();
-            Swap(node, rightMin);
-            return Remove(node);
+            if (wrappedNode.Left == null || wrappedNode.Right == null)
+                return RemoveNodeWithFewerThanTwoChildren(wrappedNode);
+
+            var rightMin = wrappedNode.Right.GetFarLeft();
+            Swap(wrappedNode, rightMin);
+            return Remove(wrappedNode);
         }
 
         /// <summary>
@@ -262,7 +264,7 @@ namespace Martinez
         /// Gets the node containing the minimum value in the tree.
         /// </summary>
         /// <returns>The node containing the minimum value, or null if the tree is empty.</returns>
-        public Node GetMinNode() => _root != null ? _root.GetFarLeft() : null;
+        public INode GetMinNode() => _root != null ? _root.GetFarLeft() : null;
 
         /// <summary>
         /// Gets the maximum value in the tree.
@@ -275,7 +277,7 @@ namespace Martinez
             return GetMaxNode().Value;
         }
 
-        public Node GetMaxNode() => _root != null ? _root.GetFarRight() : null;
+        public INode GetMaxNode() => _root != null ? _root.GetFarRight() : null;
 
         /// <summary>
         /// Determines whether the tree contains a specific value.
@@ -515,7 +517,7 @@ namespace Martinez
         /// </summary>
         /// <param name="value">The value to search for.</param>
         /// <returns>The node containing the value, or null if the value is not found.</returns>
-        public Node Find(T value)
+        public INode Find(T value)
         {
             var current = _root;
 
