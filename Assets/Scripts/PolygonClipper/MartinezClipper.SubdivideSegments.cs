@@ -39,7 +39,7 @@ namespace Martinez
                 if (m_event.left)
                 {
                     // Left endpoint of segment enters the sweep line
-                    m_event.positionInSweepLine = sweepLine.Insert(m_event);
+                    m_event.positionInSweepLine = sweepLine.Add(m_event);
                     next = prev = m_event.positionInSweepLine;
                     begin = sweepLine.GetMinNode();
 

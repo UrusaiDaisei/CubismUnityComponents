@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+
 namespace Martinez
 {
     /// <summary>
@@ -11,12 +12,6 @@ namespace Martinez
     /// <typeparam name="T">The type of elements in the tree.</typeparam>
     public sealed partial class AVLTree<T> : ICollection<T>
     {
-        /// <summary>
-        /// Delegate for tree traversal operations.
-        /// </summary>
-        /// <param name="n">The node being visited.</param>
-        public delegate void VisitHandler(Node n);
-
         /// <summary>
         /// The root node of the tree.
         /// </summary>
@@ -55,8 +50,11 @@ namespace Martinez
         /// <param name="comparer">The comparer to use for element comparisons.</param>
         public AVLTree(IEnumerable<T> collection, IComparer<T> comparer)
         {
-            if (comparer == null) throw new ArgumentNullException("comparer");
+            if (comparer == null)
+                throw new ArgumentNullException(nameof(comparer));
+
             _comparer = comparer;
+            Count = 0; // Initialize count to 0
 
             if (collection == null)
                 return;
@@ -72,16 +70,17 @@ namespace Martinez
         /// <remarks>
         /// Complexity: O(log n)
         /// </remarks>
-        public void Add(T value) => Insert(value);
+        void ICollection<T>.Add(T value) => Add(value);
 
         /// <summary>
         /// Inserts an item into the tree.
         /// </summary>
         /// <param name="value">The value to insert.</param>
         /// <returns>The node containing the inserted value.</returns>
-        public Node Insert(T value)
+        public Node Add(T value)
         {
             _root = Add(_root, value, out var result);
+            Count++; // Increment count when adding a node
             return result;
         }
 
@@ -97,6 +96,8 @@ namespace Martinez
         {
             var foundElement = false;
             _root = Remove(_root, value, ref foundElement);
+            if (foundElement)
+                Count--; // Decrement count when a node is removed
             return foundElement;
         }
 
@@ -105,16 +106,17 @@ namespace Martinez
         /// </summary>
         /// <param name="node">The node to remove.</param>
         /// <returns>True if the node was successfully removed; otherwise, false.</returns>
-        public bool RemoveAt(Node node)
+        public bool Remove(Node node)
         {
-            if (node == null) return false;
+            if (node == null)
+                return false;
 
             if (node.Left == null || node.Right == null)
                 return RemoveNodeWithFewerThanTwoChildren(node);
 
             var rightMin = node.Right.GetFarLeft();
             Swap(node, rightMin);
-            return RemoveAt(node);
+            return Remove(node);
         }
 
         /// <summary>
@@ -124,26 +126,22 @@ namespace Martinez
         /// <returns>True if the node was successfully removed.</returns>
         private bool RemoveNodeWithFewerThanTwoChildren(Node node)
         {
-            var oldParent = node.Parent;
-            var nodeWasLeft = oldParent != null && oldParent.Left == node;
-            var target = node.Left != null ? node.Left : node.Right;
+            var parent = node.Parent;
+            var wasLeft = parent != null && ReferenceEquals(parent.Left, node);
 
-            if (oldParent != null && nodeWasLeft)
-                oldParent.Left = target;
-            else if (oldParent != null)
-                oldParent.Right = target;
+            var childNode = node.Left ?? node.Right;
+            if (childNode != null)
+                childNode.Parent = parent;
 
-            if (target == null)
-            {
-                target = oldParent;
-                _root = null;
-            }
+            if (parent == null)
+                _root = childNode;
+            else if (wasLeft)
+                parent.Left = childNode;
             else
-            {
-                target.Parent = oldParent;
-            }
+                parent.Right = childNode;
 
-            RebalanceAfterRemoval(target);
+            RebalanceAfterRemoval(parent);
+            Count--; // Decrement count when a node is removed
             return true;
         }
 
@@ -281,57 +279,6 @@ namespace Martinez
         public Node GetMaxNode() => _root != null ? _root.GetFarRight() : null;
 
         /// <summary>
-        /// Traverses the tree in-order, calling the specified visitor for each node.
-        /// </summary>
-        /// <param name="visitor">The visitor to call for each node.</param>
-        public void Traverse(VisitHandler visitor)
-        {
-            if (_root != null && visitor != null) InOrder(_root, visitor);
-        }
-
-        /// <summary>
-        /// Performs an in-order traversal of the tree, calling the specified visitor for each node.
-        /// </summary>
-        /// <param name="node">The node to start the traversal from.</param>
-        /// <param name="visitor">The visitor to call for each node.</param>
-        private void InOrder(Node node, VisitHandler visitor)
-        {
-            if (node == null || visitor == null) return;
-
-            InOrder(node.Left, visitor);
-            visitor(node);
-            InOrder(node.Right, visitor);
-        }
-
-        /// <summary>
-        /// Performs a pre-order traversal of the tree, calling the visitor function for each node.
-        /// </summary>
-        /// <param name="node">The node to start the traversal from.</param>
-        /// <param name="visitor">The function to call for each node.</param>
-        private void PreOrder(Node node, VisitHandler visitor)
-        {
-            if (node == null || visitor == null) return;
-
-            visitor(node);
-            PreOrder(node.Left, visitor);
-            PreOrder(node.Right, visitor);
-        }
-
-        /// <summary>
-        /// Performs a post-order traversal of the tree, calling the visitor function for each node.
-        /// </summary>
-        /// <param name="node">The node to start the traversal from.</param>
-        /// <param name="visitor">The function to call for each node.</param>
-        private void PostOrder(Node node, VisitHandler visitor)
-        {
-            if (node == null || visitor == null) return;
-
-            PostOrder(node.Left, visitor);
-            PostOrder(node.Right, visitor);
-            visitor(node);
-        }
-
-        /// <summary>
         /// Determines whether the tree contains a specific value.
         /// </summary>
         /// <param name="arg">The value to locate in the tree.</param>
@@ -350,7 +297,11 @@ namespace Martinez
         /// <remarks>
         /// Complexity: O(1)
         /// </remarks>
-        public void Clear() => _root = null;
+        public void Clear()
+        {
+            _root = null;
+            Count = 0; // Reset count when clearing the tree
+        }
 
         /// <summary>
         /// Gets a value indicating whether the tree is read-only.
@@ -361,19 +312,11 @@ namespace Martinez
         /// Gets the number of elements contained in the tree.
         /// </summary>
         /// <remarks>
-        /// This is an expensive operation as it traverses the entire tree.
+        /// This is now an O(1) operation.
         /// </remarks>
         public int Count
         {
-            get
-            {
-                var count = 0;
-                foreach (var item in this)
-                {
-                    count++;
-                }
-                return count;
-            }
+            get; private set;
         }
 
         /// <summary>
@@ -528,7 +471,7 @@ namespace Martinez
         /// <param name="value">The value to remove.</param>
         /// <param name="wasFound">Output parameter that will be set to true if the value was found and removed.</param>
         /// <returns>The new root of the subtree after removing the value and balancing.</returns>
-        Node Remove(Node node, T value, ref bool wasFound)
+        private Node Remove(Node node, T value, ref bool wasFound)
         {
             if (node == null) return null;
 
