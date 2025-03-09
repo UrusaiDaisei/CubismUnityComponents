@@ -3,6 +3,7 @@ using UnityEngine;
 using Live2D.Cubism.Core;
 using System;
 using Martinez;
+using System.Linq;
 
 /// <summary>
 /// Controller that extracts mesh data from Cubism drawables and visualizes them.
@@ -87,11 +88,9 @@ public class PointDistributionController : MonoBehaviour
         foreach (var holder in boundaryVertices)
         {
             // Create a polygon from mesh data (vertices and indices)
-            Martinez.Polygon polygon = MeshToPolygon(holder.vertices, holder.indices);
-            if (polygon.nodes.Count > 0)
-            {
+            Polygon polygon = MeshToPolygon(holder.vertices, holder.indices);
+            if (!polygon.IsEmpty)
                 polygons.Add(polygon);
-            }
         }
 
         // Create a Martinez clipper
@@ -132,27 +131,12 @@ public class PointDistributionController : MonoBehaviour
         {
             // For each polygon, convert all its points to Vector2
             // Process all contours (both exterior and holes)
-            for (int i = 0; i < polygon.startIDs.Count - 1; i++)
+            for (int i = 0; i < polygon.Count; i++)
             {
-                int startIdx = polygon.startIDs[i];
-                int endIdx = (i == polygon.startIDs.Count - 2) ? polygon.nodes.Count : polygon.startIDs[i + 1];
-
-                // Get the points for this component
-                Vector2[] vertices = new Vector2[endIdx - startIdx];
-                for (int j = 0; j < vertices.Length; j++)
+                mergedBoundaries.Add(new Holder
                 {
-                    Vector2 point = polygon.nodes[startIdx + j];
-                    vertices[j] = point;
-                }
-
-                if (vertices.Length > 0)
-                {
-                    mergedBoundaries.Add(new Holder
-                    {
-                        vertices = vertices,
-                        indices = new int[0] // No indices needed for result contours
-                    });
-                }
+                    vertices = polygon[i].ToArray()
+                });
             }
         }
 
@@ -306,7 +290,7 @@ public class PointDistributionController : MonoBehaviour
 
         // No boundary edges found
         if (boundaryEdges.Count == 0)
-            return new Martinez.Polygon(0);
+            return Polygon.Empty;
 
         // Create edge chains by connecting edges
         List<List<int>> contours = new List<List<int>>();
@@ -362,32 +346,18 @@ public class PointDistributionController : MonoBehaviour
 
         // No valid contours found
         if (contours.Count == 0)
-            return new Martinez.Polygon(0);
+            return Polygon.Empty;
 
-        // Create a new polygon
-        Martinez.Polygon polygon = new Martinez.Polygon(vertices.Length);
+        var builder = new PolygonBuilder();
 
         // Sort contours by area (largest first - this will be our exterior contour)
         contours.Sort((a, b) => CalculateContourArea(vertices, b).CompareTo(CalculateContourArea(vertices, a)));
 
         // Add each contour as a component
         foreach (var contour in contours)
-        {
-            polygon.AddComponent();
+            builder.CreateComponent(contour.Select(i => vertices[i]));
 
-            foreach (int index in contour)
-            {
-                if (index < vertices.Length) // Safety check
-                {
-                    polygon.nodes.Add(vertices[index]);
-                }
-            }
-
-            // Close the component
-            polygon.AddComponent();
-        }
-
-        return polygon;
+        return builder.Build();
     }
 
     /// <summary>

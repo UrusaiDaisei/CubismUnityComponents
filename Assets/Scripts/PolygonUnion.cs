@@ -27,33 +27,14 @@ public static class PolygonUnion
     // Helper method to convert Unity Vector2 array to Martinez Polygon
     private static Polygon ConvertToMartinezPolygon(Vector2[] points)
     {
-        Polygon polygon = new Polygon(points.Length);
-        polygon.AddComponent(); // Add exterior ring
-
-        // Add points to the polygon
-        for (int i = 0; i < points.Length; i++)
-        {
-            polygon.nodes.Add(points[i]);
-        }
-
-        polygon.AddComponent(); // Mark end of the component
-        return polygon;
+        var builder = new PolygonBuilder();
+        builder.CreateComponent(points);
+        return builder.Build();
     }
 
     // Helper method to convert Martinez Polygon back to Unity Vector2 array
     private static Vector2[] ConvertToVector2Array(Polygon polygon)
     {
-        // For simplicity, we're assuming the polygon has only one component (exterior ring)
-        List<Vector2> result = new List<Vector2>();
-
-        // If there are multiple components, we'd need to handle them appropriately
-        // but for now, we'll just take all points
-        for (int i = 0; i < polygon.nodes.Count; i++)
-        {
-            var point = polygon.nodes[i];
-            result.Add(point);
-        }
-
-        return result.ToArray();
+        return polygon[0].ToArray();
     }
 }

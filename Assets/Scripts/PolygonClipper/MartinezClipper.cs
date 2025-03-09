@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Martinez
@@ -35,6 +36,7 @@ namespace Martinez
             List<Contour> contours = ConnectEdges(sortedEvents);
 
             // Convert contours to polygons
+            var ringsBuilder = new PolygonBuilder();
             List<Polygon> polygons = new List<Polygon>(); // outer List: List of PolygonSets
             for (int i = 0; i < contours.Count; i++)
             {
@@ -42,38 +44,31 @@ namespace Martinez
                 if (contour.isExterior && contour.points.Count > 0)
                 {
                     // The exterior ring goes first, ensure it is CCW (Counter Clockwise) 
-                    Polygon rings = new Polygon(contour.points.Count);
-                    rings.AddComponent();
+                    ringsBuilder.Clear();
                     if (contour.isClockwise)
                     {
-                        for (int k = contour.points.Count - 1; k >= 0; k--)
-                            rings.nodes.Add(contour.points[k]);
+                        ringsBuilder.CreateComponent(contour.points.Reverse<Vector2>());
                     }
                     else
                     {
-                        for (int k = 0, length = contour.points.Count; k < length; k++)
-                            rings.nodes.Add(contour.points[k]);
+                        ringsBuilder.CreateComponent(contour.points);
                     }
 
                     // Followed by holes if any, ensure they are CW (Clockwise) 
                     for (int j = 0; j < contour.holeIds.Count; j++)
                     {
-                        rings.AddComponent();
                         int holeId = contour.holeIds[j];
                         Contour hole = contours[holeId];
                         if (hole.isClockwise)
                         {
-                            for (int k = 0, length = hole.points.Count; k < length; k++)
-                                rings.nodes.Add(hole.points[k]);
+                            ringsBuilder.CreateComponent(hole.points);
                         }
                         else
                         {
-                            for (int k = hole.points.Count - 1; k >= 0; k--)
-                                rings.nodes.Add(hole.points[k]);
+                            ringsBuilder.CreateComponent(hole.points.Reverse<Vector2>());
                         }
                     }
-                    rings.AddComponent(); // abuse last StartID to store end of last component
-                    polygons.Add(rings);
+                    polygons.Add(ringsBuilder.Build());
                 }
             }
             return polygons;

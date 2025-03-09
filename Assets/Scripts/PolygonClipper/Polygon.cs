@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿using System;
 using UnityEngine;
 
 namespace Martinez
@@ -8,53 +8,43 @@ namespace Martinez
     /// </summary>
     public struct Polygon
     {
+        public static readonly Polygon Empty = new Polygon(
+            Array.Empty<Vector2>(),
+            Array.Empty<int>()
+        );
+
         /// <summary>
         /// List of points (vertices) that make up the polygon.
         /// </summary>
-        public List<Vector2> nodes;
+        private readonly Vector2[] nodes;
 
         /// <summary>
         /// List of indices that mark the start of each component (exterior and holes).
         /// </summary>
-        public List<int> startIDs;
+        private readonly int[] startIDs;
 
-        /// <summary>
-        /// Initializes a new polygon with a specified initial capacity.
-        /// </summary>
-        /// <param name="size">Initial capacity for the nodes list.</param>
-        public Polygon(int size)
+        public Polygon(Vector2[] nodes, int[] startIDs)
         {
-            nodes = new List<Vector2>(size);
-            startIDs = new List<int>();
+            this.nodes = nodes;
+            this.startIDs = startIDs;
         }
 
-        /// <summary>
-        /// Initializes a new polygon with specified capacities for nodes and components.
-        /// </summary>
-        /// <param name="NodeSize">Initial capacity for the nodes list.</param>
-        /// <param name="Components">Initial capacity for the components list.</param>
-        public Polygon(int NodeSize, int Components)
+        public ReadOnlySpan<Vector2> this[int index]
         {
-            nodes = new List<Vector2>(NodeSize);
-            startIDs = new List<int>(Components);
+            get
+            {
+                if (index < 0 || index >= startIDs.Length)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+
+                var startIndex = startIDs[index];
+                var endIndex = index < startIDs.Length - 1 ? startIDs[index + 1] : nodes.Length;
+                return nodes.AsSpan(startIndex, endIndex - startIndex);
+            }
         }
 
-        /// <summary>
-        /// Adds a new component to the polygon by marking the current node count as a start index.
-        /// </summary>
-        public void AddComponent()
-        {
-            startIDs.Add(this.nodes.Count);
-        }
+        public int Count => startIDs.Length;
 
-        /// <summary>
-        /// Clears all nodes and component markers from the polygon.
-        /// </summary>
-        public void Clear()
-        {
-            nodes.Clear();
-            startIDs.Clear();
-        }
+        public bool IsEmpty => (nodes?.Length ?? 0) == 0;
     }
 }
 

@@ -15,12 +15,12 @@ namespace Martinez
         /// <param name="depth">The depth/contour ID of the polygon.</param>
         /// <param name="Q">Priority queue to store the created events.</param>
         /// <param name="bbox">Bounding box to be updated with the extents of this polygon.</param>
-        static void ProcessPolygon(Span<Vector2> contourOrHole, bool isSubject, int depth, ref MinHeap<SweepEvent> Q, ref Rect bbox)
+        static void ProcessPolygon(ReadOnlySpan<Vector2> contourOrHole, bool isSubject, int depth, ref MinHeap<SweepEvent> Q, ref Rect bbox)
         {
-            for (int i = 0, len = contourOrHole.Length - 1; i < len; i++)
+            for (int i = 0; i < contourOrHole.Length; i++)
             {
                 var s1 = contourOrHole[i];
-                var s2 = contourOrHole[i + 1];
+                var s2 = contourOrHole[(i + 1) % contourOrHole.Length];
                 var e1 = new SweepEvent(s1, false, null, isSubject);
                 var e2 = new SweepEvent(s2, false, e1, isSubject);
                 e1.otherEvent = e2;
@@ -74,7 +74,7 @@ namespace Martinez
                 for (int i = 0; i < polygons.Count; i++)
                 {
                     var polygonSet = polygons[i];
-                    for (int j = 0; j < polygonSet.startIDs.Count - 1; j++)
+                    for (int j = 0; j < polygonSet.Count; j++)
                     {
                         bool isExteriorRing = j == 0;
                         if (!isSubject && operation == ClipType.Difference)
@@ -82,18 +82,9 @@ namespace Martinez
 
                         if (isExteriorRing)
                             contourId++;
-                        int start = polygonSet.startIDs[j];
-                        int end = polygonSet.startIDs[j + 1];
 
-                        var maxSize = end - start + 1;
-                        var rentedArray = ArrayPool<Vector2>.Shared.Rent(maxSize);
-                        //var component = rentedArray.AsSpan(0, maxSize);
-                        polygonSet.nodes.CopyTo(start, rentedArray, 0, end - start);
-                        // Close the ring so intersection between end and start are detected
-                        rentedArray[maxSize - 1] = polygonSet.nodes[start];
-                        var component = rentedArray.AsSpan(0, maxSize);
+                        var component = polygonSet[j];
                         ProcessPolygon(component, isSubject, contourId, ref eventQueue, ref bbox);
-                        ArrayPool<Vector2>.Shared.Return(rentedArray);
                     }
                 }
 
