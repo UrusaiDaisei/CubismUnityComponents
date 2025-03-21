@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Martinez
 {
@@ -10,12 +11,23 @@ namespace Martinez
     /// Implementation of an AVL balanced binary search tree.
     /// </summary>
     /// <typeparam name="T">The type of elements in the tree.</typeparam>
-    public sealed partial class AVLTree<T> : ICollection<T>
+    public sealed partial class AVLTree<T>
     {
-        /// <summary>
-        /// The root node of the tree.
-        /// </summary>
-        private Node _root;
+        private const int INITIAL_CAPACITY = 16;
+        private struct NodeData
+        {
+            public T Value;
+            public int ParentIndex;
+            public int LeftIndex;
+            public int RightIndex;
+            public int Height;
+        }
+
+        private NodeData[] _nodes;
+        private int _rootIndex = -1;
+        private int _count = 0;
+        private int _freeIndex = -1;
+        private int _freeCount = 0;
 
         /// <summary>
         /// Comparer used for element comparisons.
@@ -54,7 +66,8 @@ namespace Martinez
                 throw new ArgumentNullException(nameof(comparer));
 
             _comparer = comparer;
-            Count = 0; // Initialize count to 0
+            _count = _freeCount = 0;
+            _nodes = new NodeData[INITIAL_CAPACITY];
 
             if (collection == null)
                 return;
@@ -64,24 +77,14 @@ namespace Martinez
         }
 
         /// <summary>
-        /// Adds the specified item to the tree.
-        /// </summary>
-        /// <param name="value">The value to add.</param>
-        /// <remarks>
-        /// Complexity: O(log n)
-        /// </remarks>
-        void ICollection<T>.Add(T value) => Add(value);
-
-        /// <summary>
         /// Inserts an item into the tree.
         /// </summary>
         /// <param name="value">The value to insert.</param>
         /// <returns>The node containing the inserted value.</returns>
         public INode Add(T value)
         {
-            _root = Add(_root, value, out var result);
-            Count++; // Increment count when adding a node
-            return result;
+            _rootIndex = Add(_rootIndex, value, out var result);
+            return new NodeDataWrapper(this, result);
         }
 
         /// <summary>
@@ -94,9 +97,7 @@ namespace Martinez
         /// </remarks>
         public bool Remove(T value)
         {
-            _root = RemoveNode(_root, value, out var foundElement);
-            if (foundElement)
-                Count--; // Decrement count when a node is removed
+            _rootIndex = RemoveNode(_rootIndex, value, out var foundElement);
             return foundElement;
         }
 
@@ -105,18 +106,19 @@ namespace Martinez
         /// </summary>
         /// <param name="node">The node to remove.</param>
         /// <returns>True if the node was successfully removed; otherwise, false.</returns>
-        public bool Remove(INode node)
+        public bool Remove(INode node2)
         {
-            if (node == null)
+            if (node2 == null)
                 return false;
 
-            var wrappedNode = (Node)node;
+            var wrappedNode = (NodeDataWrapper)node2;
+            ref var node = ref _nodes[wrappedNode.Index];
 
-            if (wrappedNode.Left == null || wrappedNode.Right == null)
-                return RemoveNodeWithFewerThanTwoChildren(wrappedNode);
+            if (node.LeftIndex == -1 || node.RightIndex == -1)
+                return RemoveNodeWithFewerThanTwoChildren(wrappedNode.Index);
 
-            var rightMin = wrappedNode.Right.GetFarLeft();
-            Swap(wrappedNode, rightMin);
+            var rightMin = GetFarLeft(node.RightIndex);
+            Swap(wrappedNode.Index, rightMin);
             return Remove(wrappedNode);
         }
 
@@ -125,24 +127,29 @@ namespace Martinez
         /// </summary>
         /// <param name="node">The node to remove.</param>
         /// <returns>True if the node was successfully removed.</returns>
-        private bool RemoveNodeWithFewerThanTwoChildren(Node node)
+        private bool RemoveNodeWithFewerThanTwoChildren(int nodeIndex)
         {
-            var parent = node.Parent;
-            var wasLeft = parent != null && ReferenceEquals(parent.Left, node);
+            ref var node = ref _nodes[nodeIndex];
+            var parentIndex = node.ParentIndex;
+            var wasLeft = parentIndex != -1 && _nodes[parentIndex].LeftIndex == nodeIndex;
 
-            var childNode = node.Left ?? node.Right;
-            if (childNode != null)
-                childNode.Parent = parent;
+            var left = new NodeDataManipulator(_nodes, node.LeftIndex);
+            var right = new NodeDataManipulator(_nodes, node.RightIndex);
 
-            if (parent == null)
-                _root = childNode;
+            var childNode = left.IsValid ? left : right;
+            var otherNode = left.IsValid ? right : left;
+            if (childNode.IsValid)
+                childNode.Node.ParentIndex = parentIndex;
+
+            if (parentIndex == -1)
+                _rootIndex = childNode.Index;
             else if (wasLeft)
-                parent.Left = childNode;
+                _nodes[parentIndex].LeftIndex = childNode.Index;
             else
-                parent.Right = childNode;
+                _nodes[parentIndex].RightIndex = childNode.Index;
 
-            RebalanceAfterRemoval(parent);
-            Count--; // Decrement count when a node is removed
+            DeallocateNode(otherNode.Index);
+            RebalanceAfterRemoval(parentIndex);
             return true;
         }
 
@@ -150,16 +157,18 @@ namespace Martinez
         /// Rebalances the tree after node removal.
         /// </summary>
         /// <param name="startNode">The node to start rebalancing from.</param>
-        private void RebalanceAfterRemoval(Node startNode)
+        private void RebalanceAfterRemoval(int startNodeIndex)
         {
-            var target = startNode;
-            while (target != null)
+            var target = startNodeIndex;
+            while (target != -1)
             {
                 BalanceBasedOnBalance(target);
+                ref var node = ref _nodes[target];
 
-                if (target.Parent == null) _root = target;
+                if (node.ParentIndex == -1)
+                    _rootIndex = target;
 
-                target = target.Parent;
+                target = node.ParentIndex;
             }
         }
 
@@ -168,12 +177,16 @@ namespace Martinez
         /// </summary>
         /// <param name="a">First node to swap.</param>
         /// <param name="b">Second node to swap.</param>
-        private void Swap(Node a, Node b)
+        private void Swap(int aIndex, int bIndex)
         {
-            if (a == null || b == null) return;
+            if (aIndex == -1 || bIndex == -1)
+                return;
 
-            var aWasLeft = a.Parent != null && a.Parent.Left == a;
-            var bWasLeft = b.Parent != null && b.Parent.Left == b;
+            var a = new NodeDataManipulator(_nodes, aIndex);
+            var b = new NodeDataManipulator(_nodes, bIndex);
+
+            var aWasLeft = a.Parent.IsValid && a.Parent.Left == a;
+            var bWasLeft = b.Parent.IsValid && b.Parent.Left == b;
 
             var tempLeft = a.Left;
             var tempRight = a.Right;
@@ -199,23 +212,33 @@ namespace Martinez
         /// </summary>
         /// <param name="a">First swapped node.</param>
         /// <param name="b">Second swapped node.</param>
-        private void UpdateSwappedNodeReferences(Node a, Node b)
+        private void UpdateSwappedNodeReferences(NodeDataManipulator a, NodeDataManipulator b)
         {
             // if 'b' was the left node, right node or parent of 'a'
-            if (b.Left == b) b.Left = a;
-            else if (b.Right == b) b.Right = a;
-            else if (b.Parent == b) b.Parent = a;
+            if (b.Left == b)
+                b.Left = a;
+            else if (b.Right == b)
+                b.Right = a;
+            else if (b.Parent == b)
+                b.Parent = a;
 
             // if 'a' was the left node, right node or parent of 'b'
-            if (a.Left == a) a.Left = b;
-            else if (a.Right == a) a.Right = b;
-            else if (a.Parent == a) a.Parent = b;
+            if (a.Left == a)
+                a.Left = b;
+            else if (a.Right == a)
+                a.Right = b;
+            else if (a.Parent == a)
+                a.Parent = b;
 
             // Update child node parent references
-            if (a.Left != null) a.Left.Parent = a;
-            if (a.Right != null) a.Right.Parent = a;
-            if (b.Left != null) b.Left.Parent = b;
-            if (b.Right != null) b.Right.Parent = b;
+            if (a.Left.IsValid)
+                a.Left.Parent = a;
+            if (a.Right.IsValid)
+                a.Right.Parent = a;
+            if (b.Left.IsValid)
+                b.Left.Parent = b;
+            if (b.Right.IsValid)
+                b.Right.Parent = b;
         }
 
         /// <summary>
@@ -225,59 +248,40 @@ namespace Martinez
         /// <param name="aWasLeft">Whether first node was a left child.</param>
         /// <param name="b">Second swapped node.</param>
         /// <param name="bWasLeft">Whether second node was a left child.</param>
-        private void UpdateParentChildReferences(Node a, bool aWasLeft, Node b, bool bWasLeft)
+        private void UpdateParentChildReferences(NodeDataManipulator a, bool aWasLeft, NodeDataManipulator b, bool bWasLeft)
         {
-            if (a.Parent != null)
+            if (a.Parent.IsValid)
             {
                 if (aWasLeft) a.Parent.Left = a;
                 else a.Parent.Right = a;
             }
             else
             {
-                _root = a;
+                _rootIndex = a.Index;
             }
 
-            if (b.Parent != null)
+            if (b.Parent.IsValid)
             {
                 if (bWasLeft) b.Parent.Left = b;
                 else b.Parent.Right = b;
             }
             else
             {
-                _root = b;
+                _rootIndex = b.Index;
             }
-        }
-
-        /// <summary>
-        /// Gets the minimum value in the tree.
-        /// </summary>
-        /// <returns>The minimum value in the tree.</returns>
-        /// <exception cref="InvalidOperationException">Thrown if the tree is empty.</exception>
-        public T GetMin()
-        {
-            if (_root == null)
-                throw new InvalidOperationException("Tree is empty");
-            return GetMinNode().Value;
         }
 
         /// <summary>
         /// Gets the node containing the minimum value in the tree.
         /// </summary>
         /// <returns>The node containing the minimum value, or null if the tree is empty.</returns>
-        public INode GetMinNode() => _root != null ? _root.GetFarLeft() : null;
+        public INode GetMinNode() => _rootIndex != -1
+            ? new NodeDataWrapper(this, GetFarLeft(_rootIndex))
+            : null;
 
-        /// <summary>
-        /// Gets the maximum value in the tree.
-        /// </summary>
-        /// <returns>The maximum value, or the default value if the tree is empty.</returns>
-        public T GetMax()
-        {
-            if (_root == null)
-                throw new InvalidOperationException("Tree is empty");
-            return GetMaxNode().Value;
-        }
-
-        public INode GetMaxNode() => _root != null ? _root.GetFarRight() : null;
+        public INode GetMaxNode() => _rootIndex != -1
+            ? new NodeDataWrapper(this, GetFarRight(_rootIndex))
+            : null;
 
         /// <summary>
         /// Determines whether the tree contains a specific value.
@@ -300,8 +304,19 @@ namespace Martinez
         /// </remarks>
         public void Clear()
         {
-            _root = null;
-            Count = 0; // Reset count when clearing the tree
+            _nodes.AsSpan().Slice(0, _count)
+                .Fill(new NodeData
+                {
+                    Value = default,
+                    ParentIndex = -1,
+                    LeftIndex = -1,
+                    RightIndex = -1,
+                    Height = 0
+                });
+            _rootIndex = -1;
+            _freeIndex = -1;
+            _count = 0;
+            _freeCount = 0;
         }
 
         /// <summary>
@@ -315,28 +330,7 @@ namespace Martinez
         /// <remarks>
         /// This is now an O(1) operation.
         /// </remarks>
-        public int Count
-        {
-            get; private set;
-        }
-
-        /// <summary>
-        /// Copies the elements of the tree to an array, starting at a particular array index.
-        /// </summary>
-        /// <param name="array">The one-dimensional array that is the destination of the elements.</param>
-        /// <param name="arrayIndex">The zero-based index in array at which copying begins.</param>
-        public void CopyTo(T[] array, int arrayIndex)
-        {
-            if (array == null) throw new ArgumentNullException(nameof(array));
-            if (arrayIndex < 0) throw new ArgumentOutOfRangeException(nameof(arrayIndex));
-            if (array.Length - arrayIndex < Count) throw new ArgumentException("Destination array is not long enough to copy all the items in the collection.");
-
-            var i = arrayIndex;
-            foreach (var item in this)
-            {
-                array[i++] = item;
-            }
-        }
+        public int Count => _count - _freeCount;
 
         /// <summary>
         /// Determines the height of a node in the tree.
@@ -344,18 +338,20 @@ namespace Martinez
         /// <param name="node">The node to check.</param>
         /// <returns>The height of the node, or 0 if the node is null.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static int DetermineHeight(Node node) => node?.Height ?? 0;
+        int DetermineHeight(int nodeIndex) => nodeIndex == -1 ? 0 : _nodes[nodeIndex].Height;
 
         /// <summary>
         /// Calculates the balance factor of a node in the tree.
         /// </summary>
         /// <param name="node">The node to check.</param>
         /// <returns>The balance factor (difference between left and right subtree heights).</returns>
-        static int CalculateBalance(Node node)
+        int CalculateBalance(int nodeIndex)
         {
-            if (node == null) return 0;
+            if (nodeIndex == -1)
+                return 0;
 
-            return DetermineHeight(node.Left) - DetermineHeight(node.Right);
+            ref var node = ref _nodes[nodeIndex];
+            return DetermineHeight(node.LeftIndex) - DetermineHeight(node.RightIndex);
         }
 
         /// <summary>
@@ -363,30 +359,33 @@ namespace Martinez
         /// </summary>
         /// <param name="node">The node to balance.</param>
         /// <returns>The new root node after balancing.</returns>
-        Node BalanceBasedOnBalance(Node node)
+        int BalanceBasedOnBalance(int nodeIndex)
         {
-            if (node == null) return null;
+            if (nodeIndex == -1)
+                return -1;
 
-            node.Height = Math.Max(DetermineHeight(node.Left), DetermineHeight(node.Right)) + 1;
+            ref var node = ref _nodes[nodeIndex];
 
-            int balance = CalculateBalance(node);
+            node.Height = Math.Max(DetermineHeight(node.LeftIndex), DetermineHeight(node.RightIndex)) + 1;
 
-            if (balance > 1 && CalculateBalance(node.Left) >= 0) return RotateRight(node); // Left Left Case
-            if (balance < -1 && CalculateBalance(node.Right) <= 0) return RotateLeft(node);  // Right Right Case
+            int balance = CalculateBalance(nodeIndex);
 
-            if (balance > 1 && CalculateBalance(node.Left) < 0) // Left Right Case
+            if (balance > 1 && CalculateBalance(node.LeftIndex) >= 0) return RotateRight(nodeIndex); // Left Left Case
+            if (balance < -1 && CalculateBalance(node.RightIndex) <= 0) return RotateLeft(nodeIndex);  // Right Right Case
+
+            if (balance > 1 && CalculateBalance(node.LeftIndex) < 0) // Left Right Case
             {
-                node.Left = RotateLeft(node.Left);
-                return RotateRight(node);
+                node.LeftIndex = RotateLeft(node.LeftIndex);
+                return RotateRight(nodeIndex);
             }
 
-            if (balance < -1 && CalculateBalance(node.Right) > 0) // Right Left Case
+            if (balance < -1 && CalculateBalance(node.RightIndex) > 0) // Right Left Case
             {
-                node.Right = RotateRight(node.Right);
-                return RotateLeft(node);
+                node.RightIndex = RotateRight(node.RightIndex);
+                return RotateLeft(nodeIndex);
             }
 
-            return node;
+            return nodeIndex;
         }
 
         /// <summary>
@@ -395,45 +394,34 @@ namespace Martinez
         /// <param name="node">The node to balance.</param>
         /// <param name="value">The value being inserted.</param>
         /// <returns>The new root node after balancing.</returns>
-        Node BalanceBasedOnValue(Node node, T value)
+        int BalanceBasedOnValue(int index, T value)
         {
-            // if (node == null) return null;
+            if (index == -1)
+                return -1;
 
-            node.Height = Math.Max(DetermineHeight(node.Left), DetermineHeight(node.Right)) + 1;
+            ref var node = ref _nodes[index];
+            node.Height = Math.Max(DetermineHeight(node.LeftIndex), DetermineHeight(node.RightIndex)) + 1;
 
-            int balance = CalculateBalance(node);
+            int balance = CalculateBalance(index);
 
-            if (balance > 1 && _comparer.Compare(value, node.Left.Value) <= 0) return RotateRight(node); // Left Left Case
-            if (balance < -1 && _comparer.Compare(value, node.Right.Value) >= 0) return RotateLeft(node);  // Right Right Case
+            if (balance > 1 && _comparer.Compare(value, _nodes[node.LeftIndex].Value) <= 0)
+                return RotateRight(index); // Left Left Case
+            if (balance < -1 && _comparer.Compare(value, _nodes[node.RightIndex].Value) >= 0)
+                return RotateLeft(index);  // Right Right Case
 
-            if (balance > 1 && _comparer.Compare(value, node.Left.Value) > 0) // Left Right Case
+            if (balance > 1 && _comparer.Compare(value, _nodes[node.LeftIndex].Value) > 0) // Left Right Case
             {
-                node.Left = RotateLeft(node.Left);
-                return RotateRight(node);
+                node.LeftIndex = RotateLeft(node.LeftIndex);
+                return RotateRight(index);
             }
 
-            if (balance < -1 && _comparer.Compare(value, node.Right.Value) < 0) // Right Left Case
+            if (balance < -1 && _comparer.Compare(value, _nodes[node.RightIndex].Value) < 0) // Right Left Case
             {
-                node.Right = RotateRight(node.Right);
-                return RotateLeft(node);
+                node.RightIndex = RotateRight(node.RightIndex);
+                return RotateLeft(index);
             }
 
-            return node;
-        }
-
-        /// <summary>
-        /// Updates the height of a node and all its ancestors up to a specified parent.
-        /// </summary>
-        /// <param name="node">The node to start updating from.</param>
-        /// <param name="parent">The parent node to stop at (not including).</param>
-        void UpdateHeight(Node node, Node parent)
-        {
-            if (node != parent)
-            {
-                node.Height = Math.Max(DetermineHeight(node.Left), DetermineHeight(node.Right)) + 1;
-
-                UpdateHeight(node.Parent, parent);
-            }
+            return index;
         }
 
         /// <summary>
@@ -443,26 +431,67 @@ namespace Martinez
         /// <param name="value">The value to add.</param>
         /// <param name="result">Output parameter that will contain the newly created node.</param>
         /// <returns>The new root of the subtree after adding the value and balancing.</returns>
-        Node Add(Node node, T value, out Node result)
+        int Add(int index, T value, out int result)
         {
-            if (node == null)
+            if (index == -1)
             {
-                result = new Node(value);
+                result = AllocateNode(value, index);
                 return result;
             }
 
+            ref var node = ref _nodes[index];
+
             if (_comparer.Compare(value, node.Value) < 0)
             {
-                node.Left = Add(node.Left, value, out result);
-                node.Left.Parent = node;
+                node.LeftIndex = Add(node.LeftIndex, value, out result);
+                ref var leftNode = ref _nodes[node.LeftIndex];
+                leftNode.ParentIndex = index;
             }
             else
             {
-                node.Right = Add(node.Right, value, out result);
-                node.Right.Parent = node;
+                node.RightIndex = Add(node.RightIndex, value, out result);
+                ref var rightNode = ref _nodes[node.RightIndex];
+                rightNode.ParentIndex = index;
             }
 
-            return BalanceBasedOnValue(node, value);
+            return BalanceBasedOnValue(index, value);
+        }
+
+        int AllocateNode(T value, int parentIndex)
+        {
+            if (_freeIndex != -1)
+            {
+                var index = _freeIndex;
+                _freeIndex = _nodes[index].ParentIndex;
+                _nodes[index].Value = value;
+                _nodes[index].ParentIndex = parentIndex;
+                _freeCount--;
+                return index;
+            }
+
+            if (_count == _nodes.Length)
+                Array.Resize(ref _nodes, _nodes.Length * 2);
+
+            _nodes[_count].Value = value;
+            _nodes[_count].ParentIndex = parentIndex;
+            _nodes[_count].LeftIndex = -1;
+            _nodes[_count].RightIndex = -1;
+            _nodes[_count].Height = 1;
+            return _count++;
+        }
+
+        void DeallocateNode(int index)
+        {
+            _nodes[index] = new NodeData
+            {
+                Value = default,
+                ParentIndex = _freeIndex,
+                LeftIndex = -1,
+                RightIndex = -1,
+                Height = 0
+            };
+            _freeIndex = index;
+            _freeCount++;
         }
 
         /// <summary>
@@ -472,44 +501,93 @@ namespace Martinez
         /// <param name="value">The value to remove.</param>
         /// <param name="wasFound">Output parameter that will be set to true if the value was found and removed.</param>
         /// <returns>The new root of the subtree after removing the value and balancing.</returns>
-        private Node RemoveNode(Node node, T value, out bool wasFound)
+        private int RemoveNode(int nodeIndex, T value, out bool wasFound)
         {
-            if (node == null)
+            if (nodeIndex == -1)
             {
                 wasFound = false;
-                return null;
+                return -1;
             }
 
+            ref var node = ref _nodes[nodeIndex];
             var compareResult = _comparer.Compare(value, node.Value);
             if (compareResult < 0)
-                node.Left = RemoveNode(node.Left, value, out wasFound);
+                node.LeftIndex = RemoveNode(node.LeftIndex, value, out wasFound);
             else if (compareResult > 0)
-                node.Right = RemoveNode(node.Right, value, out wasFound);
+                node.RightIndex = RemoveNode(node.RightIndex, value, out wasFound);
             else
             {
-                if (node.Left == null || node.Right == null)
+                if (node.LeftIndex == -1 || node.RightIndex == -1)
                 {
-                    Node oldParent = node.Parent;
+                    var nodeToRemove = nodeIndex;
+                    var oldParentIndex = node.ParentIndex;
 
-                    if (node.Left == null)
-                        node = node.Right;
+                    if (node.LeftIndex == -1)
+                        nodeIndex = node.RightIndex;
                     else
-                        node = node.Left;
+                        nodeIndex = node.LeftIndex;
 
-                    if (node != null)
-                        node.Parent = oldParent;
+                    if (nodeIndex != -1)
+                        _nodes[nodeIndex].ParentIndex = oldParentIndex;
 
+                    DeallocateNode(nodeToRemove);
                     wasFound = true;
                 }
                 else
                 {
-                    Node rightMin = node.Right.GetFarLeft();
+                    var rightMinIndex = GetFarLeft(node.RightIndex);
+                    ref var rightMin = ref _nodes[rightMinIndex];
                     node.Value = rightMin.Value;
-                    node.Right = RemoveNode(node.Right, rightMin.Value, out wasFound);
+                    node.RightIndex = RemoveNode(node.RightIndex, rightMin.Value, out wasFound);
                 }
             }
 
-            return BalanceBasedOnBalance(node);
+            return BalanceBasedOnBalance(nodeIndex);
+        }
+
+        private int GetFarLeft(int nodeIndex)
+        {
+            var result = nodeIndex;
+            while (_nodes[result].LeftIndex != -1)
+                result = _nodes[result].LeftIndex;
+
+            return result;
+        }
+
+        private int GetFarRight(int nodeIndex)
+        {
+            var result = nodeIndex;
+
+            while (_nodes[result].RightIndex != -1)
+                result = _nodes[result].RightIndex;
+
+            return result;
+        }
+
+        private int GetPredecessor(int nodeIndex)
+        {
+            ref var node = ref _nodes[nodeIndex];
+            if (node.LeftIndex != -1)
+                return GetFarRight(node.LeftIndex);
+
+            var p = nodeIndex;
+            while (_nodes[p].ParentIndex != -1 && _nodes[_nodes[p].ParentIndex].LeftIndex == p)
+                p = _nodes[p].ParentIndex;
+
+            return _nodes[p].ParentIndex;
+        }
+
+        private int GetSuccessor(int nodeIndex)
+        {
+            ref var node = ref _nodes[nodeIndex];
+            if (node.RightIndex != -1)
+                return GetFarLeft(node.RightIndex);
+
+            var p = nodeIndex;
+            while (_nodes[p].ParentIndex != -1 && _nodes[_nodes[p].ParentIndex].RightIndex == p)
+                p = _nodes[p].ParentIndex;
+
+            return _nodes[p].ParentIndex;
         }
 
         /// <summary>
@@ -519,18 +597,19 @@ namespace Martinez
         /// <returns>The node containing the value, or null if the value is not found.</returns>
         public INode Find(T value)
         {
-            var current = _root;
+            var current = _rootIndex;
 
-            while (current != null)
+            while (current != -1)
             {
-                var compareResult = _comparer.Compare(value, current.Value);
+                ref var node = ref _nodes[current];
+                var compareResult = _comparer.Compare(value, node.Value);
 
                 if (compareResult == 0)
-                    return current;
+                    return new NodeDataWrapper(this, current);
 
                 current = (compareResult < 0)
-                    ? current.Left
-                    : current.Right;
+                    ? node.LeftIndex
+                    : node.RightIndex;
             }
 
             return null;
@@ -541,31 +620,35 @@ namespace Martinez
         /// </summary>
         /// <param name="node">The node to rotate.</param>
         /// <returns>The new root node after rotation.</returns>
-        static Node RotateLeft(Node node)
+        int RotateLeft(int nodeIndex)
         {
-            Node right = node.Right;
-            Node rightLeft = right.Left;
+            var node = new NodeDataManipulator(_nodes, nodeIndex);
+            var right = node.Right;
+            var rightLeft = right.Left;
+
+            var parent = node.Parent;
             node.Right = rightLeft;
 
-            Node parent = node.Parent;
-
-            if (rightLeft != null) rightLeft.Parent = node;
+            if (rightLeft.IsValid)
+                rightLeft.Parent = node;
 
             right.Left = node;
             node.Parent = right;
 
-            if (parent != null)
+            if (parent.IsValid)
             {
-                if (parent.Left == node) parent.Left = right;
-                else parent.Right = right;
+                if (parent.Left == node)
+                    parent.Left = right;
+                else
+                    parent.Right = right;
             }
 
             right.Parent = parent;
 
-            node.Height = Math.Max(DetermineHeight(node.Left), DetermineHeight(node.Right)) + 1;
-            right.Height = Math.Max(DetermineHeight(right.Left), DetermineHeight(right.Right)) + 1;
+            node.Height = Math.Max(node.Left.Height, node.Right.Height) + 1;
+            right.Height = Math.Max(right.Left.Height, right.Right.Height) + 1;
 
-            return right;
+            return right.Index;
         }
 
         /// <summary>
@@ -573,42 +656,116 @@ namespace Martinez
         /// </summary>
         /// <param name="node">The node to rotate.</param>
         /// <returns>The new root node after rotation.</returns>
-        static Node RotateRight(Node node)
+        int RotateRight(int nodeIndex)
         {
-            Node left = node.Left;
-            Node leftRight = left.Right;
-            Node parent = node.Parent;
+            var node = new NodeDataManipulator(_nodes, nodeIndex);
+            var left = node.Left;
+            var leftRight = left.Right;
+            var parent = node.Parent;
 
             node.Left = leftRight;
             node.Parent = left;
             left.Parent = parent;
             left.Right = node;
 
-            if (leftRight != null) leftRight.Parent = node;
+            if (leftRight.IsValid)
+                leftRight.Parent = node;
 
-            if (parent != null)
+            if (parent.IsValid)
             {
-                if (parent.Left == node) parent.Left = left;
-                else parent.Right = left;
+                if (parent.Left == node)
+                    parent.Left = left;
+                else
+                    parent.Right = left;
             }
 
-            node.Height = Math.Max(DetermineHeight(node.Left), DetermineHeight(node.Right)) + 1;
-            left.Height = Math.Max(DetermineHeight(left.Left), DetermineHeight(left.Right)) + 1;
-
-            return left;
+            node.Height = Math.Max(node.Left.Height, node.Right.Height) + 1;
+            left.Height = Math.Max(left.Left.Height, left.Right.Height) + 1;
+            return left.Index;
         }
 
         /// <summary>
         /// Returns an enumerator that iterates through the tree in order.
         /// </summary>
         /// <returns>An enumerator that can be used to iterate through the tree.</returns>
-        public IEnumerator<T> GetEnumerator() => new Enumerator(this);
+        //public IEnumerator<T> GetEnumerator() => new Enumerator(this);
 
-        /// <summary>
-        /// Returns an enumerator that iterates through the tree in order.
-        /// </summary>
-        /// <returns>An enumerator that can be used to iterate through the tree.</returns>
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        private class NodeDataManipulator
+        {
+            private readonly NodeData[] _nodes;
+            public readonly int Index;
+
+            public ref NodeData Node => ref _nodes[Index];
+
+            public NodeDataManipulator(NodeData[] nodes, int index)
+            {
+                _nodes = nodes;
+                Index = index;
+            }
+
+            public bool IsValid => Index != -1;
+
+            public NodeDataManipulator Left
+            {
+                get
+                {
+                    return new NodeDataManipulator(_nodes, _nodes[Index].LeftIndex);
+                }
+                set
+                {
+                    _nodes[Index].LeftIndex = value.Index;
+                }
+            }
+
+            public NodeDataManipulator Right
+            {
+                get
+                {
+                    return new NodeDataManipulator(_nodes, _nodes[Index].RightIndex);
+                }
+                set
+                {
+                    _nodes[Index].RightIndex = value.Index;
+                }
+            }
+
+            public NodeDataManipulator Parent
+            {
+                get
+                {
+                    return new NodeDataManipulator(_nodes, _nodes[Index].ParentIndex);
+                }
+                set
+                {
+                    _nodes[Index].ParentIndex = value.Index;
+                }
+            }
+
+            public int Height
+            {
+                get
+                {
+                    if (Index == -1)
+                        return 0;
+
+                    return _nodes[Index].Height;
+                }
+                set
+                {
+                    _nodes[Index].Height = value;
+                }
+            }
+
+            public static bool operator ==(NodeDataManipulator a, NodeDataManipulator b)
+            {
+                return a.Index == b.Index;
+            }
+
+            public static bool operator !=(NodeDataManipulator a, NodeDataManipulator b)
+            {
+                return !(a == b);
+            }
+        }
     }
 }
 

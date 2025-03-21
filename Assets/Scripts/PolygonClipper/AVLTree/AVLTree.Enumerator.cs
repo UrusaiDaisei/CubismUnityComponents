@@ -4,7 +4,8 @@ using System.Collections.Generic;
 
 namespace Martinez
 {
-    partial class AVLTree<T> : ICollection<T>
+    /*
+    partial class AVLTree<T>
     {
         /// <summary>
         /// Enumerator class for traversing the AVL tree in-order.
@@ -77,5 +78,8 @@ namespace Martinez
                 }
             }
         }
-    }
+
+        
+}
+*/
 }
