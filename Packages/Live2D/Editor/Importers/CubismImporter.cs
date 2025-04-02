@@ -29,6 +29,12 @@ namespace Live2D.Cubism.Editor.Importers
             public CubismModel3Json Model3Json;
         }
 
+        public ref struct MotionImportContext
+        {
+            public string AssetPath;
+            public CubismMotion3Json Motion3Json;
+        }
+
         /// <summary>
         /// Callback on <see cref="CubismModel"/> import.
         /// </summary>
@@ -48,7 +54,7 @@ namespace Live2D.Cubism.Editor.Importers
         /// </summary>
         /// <param name="importer">Importer.</param>
         /// <param name="animationClip">Generated animation.</param>
-        public delegate void MotionImportHandler(CubismMotion3JsonImporter importer, AnimationClip animationClip);
+        public delegate void MotionImportHandler(MotionImportContext ctx, AnimationClip animationClip);
 
         #endregion
 
@@ -185,7 +191,7 @@ namespace Live2D.Cubism.Editor.Importers
         /// </summary>
         /// <param name="importer">Importer.</param>
         /// <param name="animationClip">Generated animation.</param>
-        internal static void SendMotionImportEvent(CubismMotion3JsonImporter importer, AnimationClip animationClip)
+        internal static void SendMotionImportEvent(MotionImportContext ctx, AnimationClip animationClip)
         {
             if (OnDidImportMotion == null)
             {
@@ -193,7 +199,7 @@ namespace Live2D.Cubism.Editor.Importers
             }
 
 
-            OnDidImportMotion(importer, animationClip);
+            OnDidImportMotion(ctx, animationClip);
         }
 
 

@@ -68,7 +68,9 @@ namespace Live2D.Cubism.Framework
         {
             get
             {
-                return _cachedTransform ??= transform;
+				if(_cachedTransform == null)
+					_cachedTransform = transform;
+                return _cachedTransform;
             }
         }
 

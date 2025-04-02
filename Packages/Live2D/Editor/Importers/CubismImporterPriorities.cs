@@ -1,4 +1,4 @@
-﻿namespace Packages.Live2D.Editor.Importers.New
+﻿namespace Packages.Live2D.Editor.Importers
 {
     internal static class CubismImporterPriorities
     {
