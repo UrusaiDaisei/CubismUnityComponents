@@ -1,0 +1,45 @@
+---
+description: Code style guidelines that must always be followed when handling Unity files
+globs: Assets/**/*, Packages/**/*
+alwaysApply: false
+---
+# Unity Code Guidelines
+
+## Components and Monobehaviours
+
+Split the code in the following regions, other regions and sub regions might exist as adequate:
+    - Fields (optional)
+        - Public and serializable fields that are visible in the editor
+    - Runtime (optional)
+        - Runtime fields that aren't visible in the editor
+    - Unity Methods (optional)
+        - Unity specific message methods
+    - Public Methods and Structs (optional)
+        - Public methods and classes/structs
+    - Internal Methods and Structs (optional)
+        - Internal/protected methods and classes/structs
+        - Explicit interface implementations
+    - Auxiliary Code (optional)
+        - Private methods and classes/structs
+
+## Custom Editors, Windows, and Inspectors
+
+### Split the code in the following regions:
+    - UI Constants (optional)
+        - private constants and readonly static variables to configure UI styling
+    - Runtime (optional)
+        - Runtime variables and properties for the editor
+    - Unity Methods (optional)
+        - Unity specific message methods
+    - UI Logic (optional)
+        - UI methods and logic responsible for rendering custom UI
+    - Scene View Logic (optional)
+        - UI methods and logic responsible for rendering custom Scene View UI
+    - Auxiliary Code (optional)
+        - Private methods and classes/structs
+
+### Styling best practices
+If the editor code contains styling data and method, they should be declared within a static nested "Style" private class. This helps keep the code more organized.
+If the code requires multipe styles (eg. One for the inspect, another for scene view UI, another for internal windows, etc.), then each style should have its own class.
+
+
