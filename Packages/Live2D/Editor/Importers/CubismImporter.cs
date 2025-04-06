@@ -29,12 +29,6 @@ namespace Live2D.Cubism.Editor.Importers
             public CubismModel3Json Model3Json;
         }
 
-        public ref struct MotionImportContext
-        {
-            public string AssetPath;
-            public CubismMotion3Json Motion3Json;
-        }
-
         /// <summary>
         /// Callback on <see cref="CubismModel"/> import.
         /// </summary>
@@ -48,13 +42,6 @@ namespace Live2D.Cubism.Editor.Importers
         /// </summary>
         public delegate void TextureImportHandler(ModelImportContext ctx, CubismModel model, Texture2D texture);
 
-
-        /// <summary>
-        /// Callback on Cubism motions import as<see cref="AnimationClip"/>.
-        /// </summary>
-        /// <param name="importer">Importer.</param>
-        /// <param name="animationClip">Generated animation.</param>
-        public delegate void MotionImportHandler(MotionImportContext ctx, AnimationClip animationClip);
 
         #endregion
 
@@ -83,12 +70,6 @@ namespace Live2D.Cubism.Editor.Importers
         /// Texture picker to use when importing models.
         /// </summary>
         public static CubismModel3Json.TexturePicker OnPickTexture = CubismBuiltinPickers.TexturePicker;
-
-
-        /// <summary>
-        /// Allows getting called back whenever a Cubism motions is imported (and before it is saved).
-        /// </summary>
-        public static event MotionImportHandler OnDidImportMotion;
 
         #endregion
 
@@ -184,22 +165,6 @@ namespace Live2D.Cubism.Editor.Importers
 
 
             OnDidImportTexture(ctx, model, texture);
-        }
-
-        /// <summary>
-        /// Safely triggers <see cref="OnDidImportMotion"/>.
-        /// </summary>
-        /// <param name="importer">Importer.</param>
-        /// <param name="animationClip">Generated animation.</param>
-        internal static void SendMotionImportEvent(MotionImportContext ctx, AnimationClip animationClip)
-        {
-            if (OnDidImportMotion == null)
-            {
-                return;
-            }
-
-
-            OnDidImportMotion(ctx, animationClip);
         }
 
 

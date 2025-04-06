@@ -10,6 +10,7 @@ using Live2D.Cubism.Core;
 using Live2D.Cubism.Editor;
 using Live2D.Cubism.Editor.Importers;
 using Live2D.Cubism.Framework.Json;
+using Packages.Live2D.Editor.Importers;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -31,7 +32,7 @@ namespace Live2D.Cubism.Framework.MotionFade
         private static void RegisterMotionImporter()
         {
             CubismImporter.OnDidImportModel += OnModelImport;
-            CubismImporter.OnDidImportMotion += OnFadeMotionImport;
+            CubismMotion3JsonImporter.OnDidImportMotion += OnFadeMotionImport;
         }
 
         #endregion
@@ -190,7 +191,7 @@ namespace Live2D.Cubism.Framework.MotionFade
         /// </summary>
         /// <param name="importer">Event source.</param>
         /// <param name="animationClip">Imported motion.</param>
-        private static void OnFadeMotionImport(CubismImporter.MotionImportContext ctx, AnimationClip animationClip)
+        private static void OnFadeMotionImport(IMotionImportContext ctx)
         {
             // Add reference of motion for Fade to list.
             var directoryName = Path.GetDirectoryName(ctx.AssetPath);
@@ -208,7 +209,7 @@ namespace Live2D.Cubism.Framework.MotionFade
 
             var instanceId = 0;
             var isExistInstanceId = false;
-            var events = animationClip.events;
+            var events = ctx.AnimationClip.events;
             for (var k = 0; k < events.Length; ++k)
             {
                 if (events[k].functionName != "InstanceId")
@@ -223,7 +224,7 @@ namespace Live2D.Cubism.Framework.MotionFade
 
             if (!isExistInstanceId)
             {
-                instanceId = animationClip.GetInstanceID();
+                instanceId = ctx.AnimationClip.GetInstanceID();
             }
 
 
@@ -242,11 +243,11 @@ namespace Live2D.Cubism.Framework.MotionFade
             }
 
             // Create fade motion.
-            CreateFadeMotionData(motionIndex, instanceId, fadeMotions, ctx.AssetPath, ctx.Motion3Json, animationClip);
+            CreateFadeMotionData(motionIndex, instanceId, fadeMotions, ctx.AssetPath, ctx.Motion3Json, ctx.AnimationClip);
 
             // Add animation event
             {
-                var sourceAnimationEvents = AnimationUtility.GetAnimationEvents(animationClip);
+                var sourceAnimationEvents = AnimationUtility.GetAnimationEvents(ctx.AnimationClip);
                 var index = -1;
 
                 for (var i = 0; i < sourceAnimationEvents.Length; ++i)
@@ -272,7 +273,7 @@ namespace Live2D.Cubism.Framework.MotionFade
                 sourceAnimationEvents[index].intParameter = instanceId;
                 sourceAnimationEvents[index].messageOptions = SendMessageOptions.DontRequireReceiver;
 
-                AnimationUtility.SetAnimationEvents(animationClip, sourceAnimationEvents);
+                AnimationUtility.SetAnimationEvents(ctx.AnimationClip, sourceAnimationEvents);
             }
         }
 
