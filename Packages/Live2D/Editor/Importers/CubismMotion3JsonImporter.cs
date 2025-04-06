@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using Live2D.Cubism.Editor;
 using Live2D.Cubism.Framework.Json;
+using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEngine;
 using UnityEngine.Pool;
@@ -13,7 +14,9 @@ namespace Packages.Live2D.Editor.Importers
         string AssetPath { get; }
         string MotionName { get; }
         CubismMotion3Json Motion3Json { get; }
+        CubismModel3Json Model3Json { get; }
         AnimationClip AnimationClip { get; }
+
         void AddSubObject<T>(T subObject) where T : Object;
 
         T GetSubObject<T>() where T : Object;
@@ -27,16 +30,20 @@ namespace Packages.Live2D.Editor.Importers
             private readonly AssetImportContext _ctx;
             private readonly CubismMotion3Json _motion3Json;
             private readonly AnimationClip _animationClip;
+            private readonly CubismModel3Json _model3Json;
 
             public string AssetPath => _ctx.assetPath;
             public string MotionName => Path.GetFileName(AssetPath);
             public CubismMotion3Json Motion3Json => _motion3Json;
+            public CubismModel3Json Model3Json => _model3Json;
             public AnimationClip AnimationClip => _animationClip;
-            public MotionImportContext(AssetImportContext ctx, CubismMotion3Json motion3Json, AnimationClip animationClip)
+
+            public MotionImportContext(AssetImportContext ctx, CubismMotion3Json motion3Json, AnimationClip animationClip, CubismModel3Json model3Json)
             {
                 _ctx = ctx;
                 _motion3Json = motion3Json;
                 _animationClip = animationClip;
+                _model3Json = model3Json;
             }
 
             public void AddSubObject<T>(T subObject) where T : Object
@@ -75,16 +82,43 @@ namespace Packages.Live2D.Editor.Importers
         public override void OnImportAsset(AssetImportContext ctx)
         {
             var motionName = Path.GetFileName(ctx.assetPath);
-
             var Motion3Json = CubismMotion3Json.LoadPath(ctx.assetPath);
-            AnimationClip clip = Motion3Json.ToAnimationClip(ShouldImportAsOriginalWorkflow, ShouldClearAnimationCurves);
+            if (Motion3Json == null)
+            {
+                ctx.LogImportError("unable to load motion3json file.");
+                return;
+            }
+
+            var parentDirectory = Path.GetDirectoryName(ctx.assetPath);
+            var model3JsonPath = Directory.EnumerateFiles(parentDirectory, "*.model3.json").FirstOrDefault();
+            if (model3JsonPath == null)
+            {
+                ctx.LogImportError("unable to find model3json file.");
+                return;
+            }
+
+            var model3Json = CubismModel3Json.LoadAtPath(model3JsonPath);
+            if (model3Json == null)
+            {
+                ctx.LogImportError("unable to load model3json file.");
+                return;
+            }
+
+            var importedGameObject = AssetDatabase.LoadAssetAtPath<GameObject>(model3JsonPath);
+            if (importedGameObject == null)
+            {
+                ctx.LogImportError("unable to load model3json gameobject.");
+                return;
+            }
+
+            AnimationClip clip = Motion3Json.ToAnimationClip(importedGameObject, ShouldImportAsOriginalWorkflow, ShouldClearAnimationCurves);
             clip.name = motionName;
             ctx.AddObjectToAsset("animation", clip);
             ctx.SetMainObject(clip);
 
             if (OnDidImportMotion != null)
             {
-                var motionCtx = new MotionImportContext(ctx, Motion3Json, clip);
+                var motionCtx = new MotionImportContext(ctx, Motion3Json, clip, model3Json);
                 OnDidImportMotion(motionCtx);
             }
         }

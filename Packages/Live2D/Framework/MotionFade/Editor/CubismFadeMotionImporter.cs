@@ -144,7 +144,7 @@ namespace Live2D.Cubism.Framework.MotionFade
 
                 if (animationClip == null)
                 {
-                    animationClip = motion3Json.ToAnimationClip(shouldImportAsOriginalWorkflow, shouldClearAnimationCurves, true);
+                    animationClip = motion3Json.ToAnimationClip(null, shouldImportAsOriginalWorkflow, shouldClearAnimationCurves, true);
                     animationClip.name = animationName;
                 }
 
@@ -194,8 +194,7 @@ namespace Live2D.Cubism.Framework.MotionFade
         private static void OnFadeMotionImport(IMotionImportContext ctx)
         {
             // Add reference of motion for Fade to list.
-            var directoryName = Path.GetDirectoryName(ctx.AssetPath);
-            var modelDir = Path.GetDirectoryName(directoryName);
+            var modelDir = Path.GetDirectoryName(ctx.Model3Json.AssetPath).Replace("\\", "/");
             var modelName = Path.GetFileName(modelDir);
             var fadeMotionListPath = modelDir + "/" + modelName + ".fadeMotionList.asset";
 
@@ -345,6 +344,7 @@ namespace Live2D.Cubism.Framework.MotionFade
                     model3Json);
 
                 EditorUtility.CopySerialized(fadeMotion, oldFadeMotion);
+                EditorUtility.SetDirty(fadeMotion);
 
                 fadeMotions.MotionInstanceIds[motionIndex] = instanceId;
                 fadeMotions.CubismFadeMotionObjects[motionIndex] = fadeMotion;
@@ -373,7 +373,7 @@ namespace Live2D.Cubism.Framework.MotionFade
                 fadeMotions.CubismFadeMotionObjects[motionIndex] = fadeMotion;
             }
 
-            EditorUtility.SetDirty(fadeMotion);
+            EditorUtility.SetDirty(fadeMotions);
         }
 
         #endregion

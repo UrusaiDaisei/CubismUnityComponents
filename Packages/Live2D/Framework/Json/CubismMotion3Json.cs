@@ -9,6 +9,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Live2D.Cubism.Core;
 using Live2D.Cubism.Framework.MouthMovement;
 using Live2D.Cubism.Rendering;
@@ -16,6 +17,7 @@ using Live2D.Cubism.Rendering;
 using UnityEditor;
 #endif
 using UnityEngine;
+using UnityEngine.Pool;
 
 
 namespace Live2D.Cubism.Framework.Json
@@ -210,7 +212,7 @@ namespace Live2D.Cubism.Framework.Json
         /// <remarks>
         /// Note this method generates <see cref="AnimationClip.legacy"/> clips when called at runtime.
         /// </remarks>
-        public AnimationClip ToAnimationClip(bool shouldImportAsOriginalWorkflow = false, bool shouldClearAnimationCurves = false,
+        public AnimationClip ToAnimationClip(GameObject modelGameObject, bool shouldImportAsOriginalWorkflow = false, bool shouldClearAnimationCurves = false,
                                              bool isCallFormModelJson = false, CubismPose3Json poseJson = null)
         {
             // Check béziers restriction flag.
@@ -234,7 +236,8 @@ namespace Live2D.Cubism.Framework.Json
 #endif
             };
 
-            return ToAnimationClip(animationClip, shouldImportAsOriginalWorkflow, shouldClearAnimationCurves, isCallFormModelJson, poseJson);
+            FillAnimationClip(animationClip, modelGameObject, shouldImportAsOriginalWorkflow, shouldClearAnimationCurves, isCallFormModelJson, poseJson);
+            return animationClip;
         }
 
         /// <summary>
@@ -249,13 +252,131 @@ namespace Live2D.Cubism.Framework.Json
         /// <remarks>
         /// Note this method generates <see cref="AnimationClip.legacy"/> clips when called at runtime.
         /// </remarks>
-        public AnimationClip ToAnimationClip(AnimationClip animationClip, bool shouldImportAsOriginalWorkflow = false, bool shouldClearAnimationCurves = false
+        public void FillAnimationClip(AnimationClip animationClip, GameObject modelGameObject, bool shouldImportAsOriginalWorkflow = false, bool shouldClearAnimationCurves = false
                                                                         , bool isCallFormModelJson = false, CubismPose3Json poseJson = null)
         {
             // Clear curves.
             if (!shouldImportAsOriginalWorkflow || (isCallFormModelJson && shouldImportAsOriginalWorkflow && shouldClearAnimationCurves))
             {
                 animationClip.ClearCurves();
+            }
+
+            Dictionary<string, string> parameterPaths = null;
+            Dictionary<string, string> getParameterPaths()
+            {
+                if (parameterPaths == null)
+                {
+                    parameterPaths = new Dictionary<string, string>();
+                    var root = modelGameObject.transform;
+                    var buffer = ListPool<CubismParameter>.Get();
+                    try
+                    {
+                        modelGameObject.GetComponentsInChildren(true, buffer);
+                        foreach (var parameter in buffer)
+                        {
+                            var relativePath = AnimationUtility.CalculateTransformPath(parameter.transform, root);
+                            parameterPaths[parameter.Id] = relativePath;
+                        }
+                    }
+                    finally
+                    {
+                        ListPool<CubismParameter>.Release(buffer);
+                    }
+                }
+
+                return parameterPaths;
+            }
+
+            Dictionary<string, string> partPaths = null;
+            Dictionary<string, string> getPartPaths()
+            {
+                if (partPaths == null)
+                {
+                    partPaths = new Dictionary<string, string>();
+                    var root = modelGameObject.transform;
+                    var buffer = ListPool<CubismPart>.Get();
+                    try
+                    {
+                        modelGameObject.GetComponentsInChildren(true, buffer);
+                        foreach (var part in buffer)
+                        {
+                            var relativePath = AnimationUtility.CalculateTransformPath(part.transform, root);
+                            partPaths[part.Id] = relativePath;
+                        }
+                    }
+                    finally
+                    {
+                        ListPool<CubismPart>.Release(buffer);
+                    }
+                }
+
+                return partPaths;
+            }
+
+            CurveBinding handelModelCurve(in SerializableCurve curve)
+            {
+                // Bind opacity.
+                if (curve.Id == "Opacity")
+                    return new CurveBinding
+                    {
+                        relativePath = string.Empty,
+                        propertyName = "Opacity",
+                        type = typeof(CubismRenderController)
+                    };
+
+                // Bind eye-blink.
+                if (curve.Id == "EyeBlink")
+                    return new CurveBinding
+                    {
+                        relativePath = string.Empty,
+                        propertyName = "EyeOpening",
+                        type = typeof(CubismEyeBlinkController)
+                    };
+
+                // Bind lip-sync.
+                else if (curve.Id == "LipSync")
+                    return new CurveBinding
+                    {
+                        relativePath = string.Empty,
+                        propertyName = "MouthOpening",
+                        type = typeof(CubismMouthController)
+                    };
+
+                return default;
+            }
+
+            CurveBinding handelParameterCurve(in SerializableCurve curve)
+            {
+                if (modelGameObject == null)
+                    return default;
+
+                var parameterPaths = getParameterPaths();
+                if (!parameterPaths.TryGetValue(curve.Id, out var relativePath))
+                    return default;
+
+                return new CurveBinding
+                {
+                    relativePath = relativePath,
+                    propertyName = "Value",
+                    type = typeof(CubismParameter)
+                };
+            }
+
+            CurveBinding handelPartOpacityCurve(in SerializableCurve curve)
+            {
+                if (modelGameObject == null)
+                    return default;
+
+                var partPaths = getPartPaths();
+                if (!partPaths.TryGetValue(curve.Id, out var relativePath))
+                    return default;
+
+                return new CurveBinding
+                {
+                    relativePath = relativePath,
+                    propertyName = "Opacity",
+                    type = typeof(CubismPart)
+                };
             }
 
             // Convert curves.
@@ -269,76 +390,29 @@ namespace Live2D.Cubism.Framework.Json
                     continue;
                 }
 
-                var relativePath = string.Empty;
-                var type = default(Type);
-                var propertyName = string.Empty;
+                CurveBinding binding = default;
                 var animationCurve = new AnimationCurve(ConvertCurveSegmentsToKeyframes(curve.Segments));
 
-
-                // Create model binding.
-                if (curve.Target == "Model")
+                switch (curve.Target)
                 {
-                    // Bind opacity.
-                    if (curve.Id == "Opacity")
-                    {
-                        relativePath = string.Empty;
-                        propertyName = "Opacity";
-                        type = typeof(CubismRenderController);
-                    }
+                    case "Model":
+                        binding = handelModelCurve(curve);
+                        break;
+                    case "Parameter":
+                        binding = handelParameterCurve(curve);
+                        break;
+                    case "PartOpacity":
+                        binding = handelPartOpacityCurve(curve);
+                        // original workflow.
+                        if (shouldImportAsOriginalWorkflow && poseJson != null && poseJson.FadeInTime != 0.0f)
+                            animationCurve = ConvertSteppedCurveToLinerCurver(curve, poseJson.FadeInTime);
 
-                    // Bind eye-blink.
-                    else if (curve.Id == "EyeBlink")
-                    {
-                        relativePath = string.Empty;
-                        propertyName = "EyeOpening";
-                        type = typeof(CubismEyeBlinkController);
-                    }
-
-                    // Bind lip-sync.
-                    else if (curve.Id == "LipSync")
-                    {
-                        relativePath = string.Empty;
-                        propertyName = "MouthOpening";
-                        type = typeof(CubismMouthController);
-                    }
+                        break;
+                    default:
+                        break;
                 }
 
-                // Create parameter binding.
-                else if (curve.Target == "Parameter")
-                {
-                    relativePath = "Parameters/" + curve.Id;
-                    propertyName = "Value";
-                    type = typeof(CubismParameter);
-                }
-
-                // Create part opacity binding.
-                else if (curve.Target == "PartOpacity")
-                {
-                    relativePath = "Parts/" + curve.Id;
-                    propertyName = "Opacity";
-                    type = typeof(CubismPart);
-
-                    // original workflow.
-                    if (shouldImportAsOriginalWorkflow && poseJson != null && poseJson.FadeInTime != 0.0f)
-                    {
-                        animationCurve = ConvertSteppedCurveToLinerCurver(curve, poseJson.FadeInTime);
-                    }
-                }
-
-
-#if UNITY_EDITOR
-                var curveBinding = new EditorCurveBinding
-                {
-                    path = relativePath,
-                    propertyName = propertyName,
-                    type = type
-                };
-
-
-                AnimationUtility.SetEditorCurve(animationClip, curveBinding, animationCurve);
-#else
-                animationClip.SetCurve(relativePath, type, propertyName, animationCurve);
-#endif
+                binding.Bind(animationClip, animationCurve);
             }
 
 
@@ -381,8 +455,33 @@ namespace Live2D.Cubism.Framework.Json
                 }
             }
 #endif
+        }
 
-            return animationClip;
+        private ref struct CurveBinding
+        {
+            public string relativePath;
+            public string propertyName;
+            public Type type;
+
+            public void Bind(AnimationClip animationClip, AnimationCurve animationCurve)
+            {
+                if (string.IsNullOrEmpty(relativePath) || string.IsNullOrEmpty(propertyName) || type == null)
+                    return;
+
+#if UNITY_EDITOR
+                var curveBinding = new EditorCurveBinding
+                {
+                    path = relativePath,
+                    propertyName = propertyName,
+                    type = type
+                };
+
+
+                AnimationUtility.SetEditorCurve(animationClip, curveBinding, animationCurve);
+#else
+                animationClip.SetCurve(relativePath, type, propertyName, animationCurve);
+#endif
+            }
         }
 
         #region Segment Parsing

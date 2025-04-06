@@ -51,7 +51,7 @@ namespace Live2D.Cubism.Editor.Importers
             var pose3Json = ctx.Model3Json.Pose3Json;
 
             // Fail silently...
-            if(!shouldImportAsOriginalWorkflow || pose3Json == null)
+            if (!shouldImportAsOriginalWorkflow || pose3Json == null)
             {
                 return;
             }
@@ -72,14 +72,14 @@ namespace Live2D.Cubism.Editor.Importers
             }
 
 
-            for(var i = 0; i < motions.Count; ++i)
+            for (var i = 0; i < motions.Count; ++i)
             {
                 var motionPath = Path.GetDirectoryName(assetPath) + "/" + motions[i].File;
                 var jsonString = string.IsNullOrEmpty(motionPath)
                                     ? null
                                     : File.ReadAllText(motionPath);
 
-                if(jsonString == null)
+                if (jsonString == null)
                 {
                     continue;
                 }
@@ -96,49 +96,53 @@ namespace Live2D.Cubism.Editor.Importers
                     ? assetList.AssetPaths.IndexOf(animationClipPath)
                     : -1;
 
-                var oldAnimationClip = (shouldImportAsOriginalWorkflow)
+                var animationClip = (shouldImportAsOriginalWorkflow)
                     ? (assetListIndex >= 0)
                         ? (AnimationClip)assetList.Assets[assetListIndex]
                         : AssetDatabase.LoadAssetAtPath<AnimationClip>(animationClipPath)
                     : null;
 
-                var newAnimationClip = (oldAnimationClip == null)
-                    ? motion3Json.ToAnimationClip(shouldImportAsOriginalWorkflow, shouldClearAnimationCurves, true, pose3Json)
-                    : motion3Json.ToAnimationClip(oldAnimationClip, shouldImportAsOriginalWorkflow, shouldClearAnimationCurves, true,
-                        pose3Json);
-                newAnimationClip.name = animationName;
+                if (animationClip == null)
+                {
+                    animationClip = motion3Json.ToAnimationClip(null, shouldImportAsOriginalWorkflow, shouldClearAnimationCurves, true, pose3Json);
+                }
+                else
+                {
+                    motion3Json.FillAnimationClip(animationClip, null, shouldImportAsOriginalWorkflow, shouldClearAnimationCurves, true, pose3Json);
+                }
+
+                animationClip.name = animationName;
 
                 if (assetListIndex < 0)
                 {
                     // Create animation clip.
-                    if (oldAnimationClip == null)
+                    if (animationClip == null)
                     {
-                        AssetDatabase.CreateAsset(newAnimationClip, animationClipPath);
-                        oldAnimationClip = newAnimationClip;
+                        AssetDatabase.CreateAsset(animationClip, animationClipPath);
                     }
 
-                    assetList.Assets.Add(newAnimationClip);
+                    assetList.Assets.Add(animationClip);
                     assetList.AssetPaths.Add(animationClipPath);
                     assetList.IsImporterDirties.Add(false);
                 }
                 // Update animation clip.
                 else
                 {
-                    EditorUtility.CopySerialized(newAnimationClip, oldAnimationClip);
-                    EditorUtility.SetDirty(oldAnimationClip);
-                    assetList.Assets[assetListIndex] = oldAnimationClip;
+                    EditorUtility.CopySerialized(animationClip, animationClip);
+                    EditorUtility.SetDirty(animationClip);
+                    assetList.Assets[assetListIndex] = animationClip;
                 }
 
                 // Add animation event
                 {
-                    var instanceId = newAnimationClip.GetInstanceID();
+                    var instanceId = animationClip.GetInstanceID();
 
-                    var sourceAnimationEvents = AnimationUtility.GetAnimationEvents(newAnimationClip);
+                    var sourceAnimationEvents = AnimationUtility.GetAnimationEvents(animationClip);
                     var index = -1;
 
-                    for(var j = 0; j < sourceAnimationEvents.Length; ++j)
+                    for (var j = 0; j < sourceAnimationEvents.Length; ++j)
                     {
-                        if(sourceAnimationEvents[j].functionName != "InstanceId")
+                        if (sourceAnimationEvents[j].functionName != "InstanceId")
                         {
                             continue;
                         }
@@ -147,7 +151,7 @@ namespace Live2D.Cubism.Editor.Importers
                         break;
                     }
 
-                    if(index == -1)
+                    if (index == -1)
                     {
                         index = sourceAnimationEvents.Length;
                         Array.Resize(ref sourceAnimationEvents, sourceAnimationEvents.Length + 1);
@@ -159,7 +163,7 @@ namespace Live2D.Cubism.Editor.Importers
                     sourceAnimationEvents[index].intParameter = instanceId;
                     sourceAnimationEvents[index].messageOptions = SendMessageOptions.DontRequireReceiver;
 
-                    AnimationUtility.SetAnimationEvents(newAnimationClip, sourceAnimationEvents);
+                    AnimationUtility.SetAnimationEvents(animationClip, sourceAnimationEvents);
                 }
 
 
@@ -172,7 +176,7 @@ namespace Live2D.Cubism.Editor.Importers
                     fadeMotion = CubismFadeMotionData.CreateInstance(
                         motion3Json,
                         Path.GetFileName(motions[i].File),
-                        newAnimationClip.length,
+                        animationClip.length,
                         shouldImportAsOriginalWorkflow,
                         true);
 
@@ -237,7 +241,7 @@ namespace Live2D.Cubism.Editor.Importers
                 {
                     var instanceId = 0;
                     var isExistInstanceId = false;
-                    var events = newAnimationClip.events;
+                    var events = animationClip.events;
                     for (var k = 0; k < events.Length; ++k)
                     {
                         if (events[k].functionName != "InstanceId")
@@ -252,7 +256,7 @@ namespace Live2D.Cubism.Editor.Importers
 
                     if (!isExistInstanceId)
                     {
-                        instanceId = newAnimationClip.GetInstanceID();
+                        instanceId = animationClip.GetInstanceID();
                     }
 
                     fadeMotions.MotionInstanceIds[motionIndex] = instanceId;
@@ -260,7 +264,7 @@ namespace Live2D.Cubism.Editor.Importers
                 }
                 else
                 {
-                    var instanceId = newAnimationClip.GetInstanceID();
+                    var instanceId = animationClip.GetInstanceID();
                     motionIndex = fadeMotions.MotionInstanceIds.Length;
 
                     Array.Resize(ref fadeMotions.MotionInstanceIds, motionIndex + 1);
@@ -276,7 +280,7 @@ namespace Live2D.Cubism.Editor.Importers
 
                     if (curve.Target == "PartOpacity")
                     {
-                        if(pose3Json.FadeInTime == 0.0f)
+                        if (pose3Json.FadeInTime == 0.0f)
                         {
                             fadeMotion.ParameterIds[curveIndex] = curve.Id;
                             fadeMotion.ParameterFadeInTimes[curveIndex] = pose3Json.FadeInTime;
@@ -317,7 +321,7 @@ namespace Live2D.Cubism.Editor.Importers
                 var group = groups[groupIndex];
 
                 // Fail silently...
-                if(group == null)
+                if (group == null)
                 {
                     continue;
                 }
@@ -326,14 +330,14 @@ namespace Live2D.Cubism.Editor.Importers
                 {
                     var part = parts.FindById(group[partIndex].Id);
 
-                    if(part == null)
+                    if (part == null)
                     {
                         continue;
                     }
 
                     var posePart = part.gameObject.GetComponent<CubismPosePart>();
 
-                    if(posePart == null)
+                    if (posePart == null)
                     {
                         posePart = part.gameObject.AddComponent<CubismPosePart>();
                     }
@@ -343,7 +347,7 @@ namespace Live2D.Cubism.Editor.Importers
                     posePart.Link = group[partIndex].Link;
                 }
             }
-         }
+        }
 
         #endregion
     }

@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Packages.Live2D.Editor.Importers.New
 {
-    [ScriptedImporter(1,"model3.json",CubismImporterPriorities.Model3JsonImporter)]
+    [ScriptedImporter(1, "model3.json", CubismImporterPriorities.Model3JsonImporter)]
     public sealed class CubismModel3JsonImporter : ScriptedImporter
     {
         private enum OverrideOption
@@ -27,8 +27,7 @@ namespace Packages.Live2D.Editor.Importers.New
         public override void OnImportAsset(AssetImportContext ctx)
         {
             var model3Json = CubismModel3Json.LoadAtPath(ctx.assetPath);
-
-            if(model3Json == null)
+            if (model3Json == null)
             {
                 ctx.LogImportError("unable to load model3json file.");
                 return;
@@ -44,7 +43,8 @@ namespace Packages.Live2D.Editor.Importers.New
             // Instantiate model source and model.
             var model = model3Json.ToModel(moc, CubismImporter.OnPickMaterial, CubismImporter.OnPickTexture, ShouldImportAsOriginalWorkflow);
 
-            if (model == null) {
+            if (model == null)
+            {
                 ctx.LogImportError("unable to import model data.");
                 return;
             }
@@ -86,7 +86,8 @@ namespace Packages.Live2D.Editor.Importers.New
         private void AssignDependencies(AssetImportContext ctx, CubismModel3Json.SerializableFileReferences references)
         {
             var baseDir = Path.GetDirectoryName(ctx.assetPath);
-            string getFulldir(string path) {
+            string getFulldir(string path)
+            {
                 if (string.IsNullOrWhiteSpace(path))
                 {
                     return null;
@@ -114,18 +115,18 @@ namespace Packages.Live2D.Editor.Importers.New
                 if (!string.IsNullOrWhiteSpace(references.Pose))
                     yield return new string[] { getFulldir(references.Pose) };
 
-                if(references.Expressions?.Length > 0)
+                if (references.Expressions?.Length > 0)
                 {
-                    yield return references.Expressions.Select(e=>e.File)
+                    yield return references.Expressions.Select(e => e.File)
                         .Distinct().Select(getFulldir);
                 }
 
                 if (references.Motions.Motions?.Length > 0)
                 {
-                    yield return references.Motions.Motions.SelectMany(m => m).Select(m=>m.File)
+                    yield return references.Motions.Motions.SelectMany(m => m).Select(m => m.File)
                         .Distinct().Select(getFulldir);
                 }
-                
+
             }
 
             foreach (var path in UnravelFileReferences().SelectMany(p => p))
