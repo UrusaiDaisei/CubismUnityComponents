@@ -10,6 +10,7 @@ using Live2D.Cubism.Core;
 using Live2D.Cubism.Framework.Json;
 using Live2D.Cubism.Framework.MotionFade;
 using Live2D.Cubism.Framework.Pose;
+using Packages.Live2D.Editor.Importers.New;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -32,7 +33,7 @@ namespace Live2D.Cubism.Editor.Importers
         [InitializeOnLoadMethod]
         private static void RegisterModelImporter()
         {
-            CubismImporter.OnDidImportModel += OnModelImport;
+            CubismModel3JsonImporter.OnDidImportModel += OnModelImport;
         }
 
         #endregion
@@ -44,7 +45,7 @@ namespace Live2D.Cubism.Editor.Importers
         /// </summary>
         /// <param name="sender">Event source.</param>
         /// <param name="model">Imported model.</param>
-        private static void OnModelImport(CubismImporter.ModelImportContext ctx, CubismModel model)
+        private static void OnModelImport(IModelImportContext ctx)
         {
             var shouldImportAsOriginalWorkflow = CubismUnityEditorMenu.ShouldImportAsOriginalWorkflow;
             var shouldClearAnimationCurves = CubismUnityEditorMenu.ShouldClearAnimationCurves;
@@ -300,7 +301,7 @@ namespace Live2D.Cubism.Editor.Importers
                 EditorUtility.SetDirty(fadeMotion);
             }
 
-            InitializePosePart(model.Parts, pose3Json.Groups);
+            InitializePosePart(ctx.Model.Parts, pose3Json.Groups);
         }
 
         /// <summary>

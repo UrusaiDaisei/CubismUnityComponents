@@ -8,6 +8,7 @@
 
 using Live2D.Cubism.Core;
 using Live2D.Cubism.Framework.Json;
+using Packages.Live2D.Editor.Importers.New;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
@@ -23,34 +24,15 @@ namespace Live2D.Cubism.Editor.Importers
     {
         #region Delegates
 
-        public ref struct ModelImportContext
-        {
-            public string AssetPath;
-            public CubismModel3Json Model3Json;
-        }
-
-        /// <summary>
-        /// Callback on <see cref="CubismModel"/> import.
-        /// </summary>
-        /// <param name="importer">Importer.</param>
-        /// <param name="model">Imported model.</param>
-        public delegate void ModelImportListener(ModelImportContext ctx, CubismModel model);
-
-
         /// <summary>
         /// Callback for textures used by Cubism model on <see cref="CubismModel"/> import.
         /// </summary>
-        public delegate void TextureImportHandler(ModelImportContext ctx, CubismModel model, Texture2D texture);
+        public delegate void TextureImportHandler(IModelImportContext ctx, CubismModel model, Texture2D texture);
 
 
         #endregion
 
         #region Events
-
-        /// <summary>
-        /// Allows getting called back whenever a model is imported (and before it is saved).
-        /// </summary>
-        public static event ModelImportListener OnDidImportModel;
 
         /// <summary>
         /// Allows customizing import of textures used by a Cubism model.
@@ -133,30 +115,13 @@ namespace Live2D.Cubism.Editor.Importers
             return importer;
         }
 
-
-        /// <summary>
-        /// Safely triggers <see cref="OnDidImportModel"/>.
-        /// </summary>
-        /// <param name="importer">Importer.</param>
-        /// <param name="model">Imported model.</param>
-        internal static void SendModelImportEvent(ModelImportContext ctx, CubismModel model)
-        {
-            if (OnDidImportModel == null)
-            {
-                return;
-            }
-
-
-            OnDidImportModel(ctx, model);
-        }
-
         /// <summary>
         /// Safely triggers <see cref="OnDidImportModelTexture"/>
         /// </summary>
         /// <param name="importer">Importer.</param>
         /// <param name="model">Imported model.</param>
         /// <param name="texture">Imported texture.</param>
-        internal static void SendModelTextureImportEvent(ModelImportContext ctx, CubismModel model, Texture2D texture)
+        internal static void SendModelTextureImportEvent(IModelImportContext ctx, CubismModel model, Texture2D texture)
         {
             if (OnDidImportTexture == null)
             {
@@ -192,7 +157,7 @@ namespace Live2D.Cubism.Editor.Importers
         /// <param name="importer">Importer.</param>
         /// <param name="model">Imported model.</param>
         /// <param name="texture">Imported texture.</param>
-        private static void BuiltinTextureImportHandler(ModelImportContext ctx, CubismModel model, Texture2D texture)
+        private static void BuiltinTextureImportHandler(IModelImportContext ctx, CubismModel model, Texture2D texture)
         {
             var textureImporter = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(texture)) as TextureImporter;
 

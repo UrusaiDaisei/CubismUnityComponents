@@ -11,6 +11,7 @@ using Live2D.Cubism.Editor;
 using Live2D.Cubism.Editor.Importers;
 using Live2D.Cubism.Framework.Json;
 using Packages.Live2D.Editor.Importers;
+using Packages.Live2D.Editor.Importers.New;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -31,7 +32,7 @@ namespace Live2D.Cubism.Framework.MotionFade
         [InitializeOnLoadMethod]
         private static void RegisterMotionImporter()
         {
-            CubismImporter.OnDidImportModel += OnModelImport;
+            CubismModel3JsonImporter.OnDidImportModel += OnModelImport;
             CubismMotion3JsonImporter.OnDidImportMotion += OnFadeMotionImport;
         }
 
@@ -44,7 +45,7 @@ namespace Live2D.Cubism.Framework.MotionFade
         /// </summary>
         /// <param name="importer">Event source.</param>
         /// <param name="model">Imported model.</param>
-        private static void OnModelImport(CubismImporter.ModelImportContext ctx, CubismModel model)
+        private static void OnModelImport(IModelImportContext ctx)
         {
             var modelDir = Path.GetDirectoryName(ctx.AssetPath).Replace("\\", "/");
             var modelName = Path.GetFileName(modelDir);
@@ -59,7 +60,7 @@ namespace Live2D.Cubism.Framework.MotionFade
             var dataPath = Directory.GetParent(Application.dataPath).FullName + "/";
             var assetPath = ctx.AssetPath.Replace(".model3.json", ".controller");
 
-            var animator = model.GetComponent<Animator>();
+            var animator = ctx.Model.GetComponent<Animator>();
 
             if (!File.Exists(dataPath + assetPath))
             {
@@ -88,7 +89,7 @@ namespace Live2D.Cubism.Framework.MotionFade
                 }
             }
 
-            var fadeController = model.GetComponent<CubismFadeController>();
+            var fadeController = ctx.Model.GetComponent<CubismFadeController>();
             if (ctx.Model3Json.FileReferences.Motions.Motions == null || fadeController == null)
             {
                 return;

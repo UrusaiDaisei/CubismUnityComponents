@@ -8,45 +8,21 @@
 
 using Live2D.Cubism.Framework.Expression;
 using Live2D.Cubism.Framework.Json;
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Live2D.Cubism.Core;
 using UnityEditor;
 using UnityEngine;
+using Packages.Live2D.Editor.Importers.New;
+using Live2D.Cubism.Framework;
+using UnityEditor.AssetImporters;
+using Packages.Live2D.Editor.Importers;
 
 namespace Live2D.Cubism.Editor.Importers
 {
-    public sealed class CubismExpression3JsonImporter : CubismImporterBase
+    [ScriptedImporter(1, "exp3.json", CubismImporterPriorities.Expression3JsonImporter)]
+    public sealed class CubismExpression3JsonImporter : ScriptedImporter
     {
-        /// <summary>
-        /// <see cref="CubismPose3Json"/> backing field.
-        /// </summary>
-        [NonSerialized]
-        private CubismExp3Json _expressionJson;
-
-        private CubismExp3Json ExpressionJson
-        {
-            get
-            {
-                if(_expressionJson != null)
-                {
-                    return _expressionJson;
-                }
-
-                if(string.IsNullOrEmpty(AssetPath))
-                {
-                    return null;
-                }
-
-                var expressionJson = AssetDatabase.LoadAssetAtPath<TextAsset>((AssetPath));
-                _expressionJson = CubismExp3Json.LoadFrom(expressionJson);
-
-                return _expressionJson;
-            }
-        }
-
         #region Unity Event Handling
 
         /// <summary>
@@ -56,129 +32,75 @@ namespace Live2D.Cubism.Editor.Importers
         // ReSharper disable once UnusedMember.Local
         private static void RegisterImporter()
         {
-            CubismImporter.RegisterImporter<CubismExpression3JsonImporter>(".exp3.json");
-            CubismImporter.OnDidImportModel += OnModelImport;
+            CubismModel3JsonImporter.OnDidImportModel += OnModelImport;
         }
 
         #endregion
 
         #region Cubism Import Event Handling
 
-        /// <summary>
-        /// Imports the corresponding asset.
-        /// </summary>
-        public override void Import()
+        public override void OnImportAsset(AssetImportContext ctx)
         {
-            var oldExpressionData = AssetDatabase.LoadAssetAtPath<CubismExpressionData>(AssetPath.Replace(".exp3.json", ".exp3.asset"));
-
-            // Create expression data.
-            CubismExpressionData expressionData;
-
-            if(oldExpressionData == null)
+            var parentDirectory = Path.GetDirectoryName(ctx.assetPath);
+            var model3JsonPath = Directory.EnumerateFiles(parentDirectory, "*.model3.json").FirstOrDefault();
+            if (model3JsonPath == null)
             {
-                expressionData = CubismExpressionData.CreateInstance(ExpressionJson);
-                AssetDatabase.CreateAsset(expressionData, AssetPath.Replace(".exp3.json", ".exp3.asset"));
-            }
-            else
-            {
-                expressionData = CubismExpressionData.CreateInstance(oldExpressionData, ExpressionJson);
-                EditorUtility.CopySerialized(expressionData, oldExpressionData);
-                expressionData = oldExpressionData;
-            }
-
-            EditorUtility.SetDirty(expressionData);
-
-            // Add expression data to expression list.
-            var directoryName = Path.GetDirectoryName(AssetPath);
-            var modelDir = Path.GetDirectoryName(directoryName);
-            var modelName = Path.GetFileName(modelDir);
-            var expressionListPath = Path.GetDirectoryName(directoryName).Replace("\\", "/") + "/" + modelName + ".expressionList.asset";
-
-            var assetList = CubismCreatedAssetList.GetInstance();
-            var assetListIndex = assetList.AssetPaths.Contains(expressionListPath)
-                ? assetList.AssetPaths.IndexOf(expressionListPath)
-                : -1;
-
-            var expressionList = GetExpressionList(expressionListPath);
-
-            if (expressionList == null)
-            {
-                Debug.LogError("CubismExpression3JsonImporter : Can not create CubismExpressionList.");
+                ctx.LogImportError("unable to find model3json file.");
                 return;
             }
 
-            // Rebuild the array if any element is null.
-            if (expressionList.CubismExpressionObjects.Any(element => element == null))
-            {
-                var cubismExpressionObjectsToList = expressionList.CubismExpressionObjects.ToList();
-                cubismExpressionObjectsToList.RemoveAll(element => element == null);
+            var data = File.ReadAllText(ctx.assetPath);
+            var ExpressionJson = CubismExp3Json.LoadFrom(data);
 
-                var expressionEqualityComparer = new ExpressionEqualityComparer();
-                var expressionDistinctObjectsArray = cubismExpressionObjectsToList.Distinct(expressionEqualityComparer).ToArray();
-
-                expressionList.CubismExpressionObjects = new CubismExpressionData[0];
-                Array.Resize(ref expressionList.CubismExpressionObjects, expressionDistinctObjectsArray.Length);
-
-                expressionList.CubismExpressionObjects = expressionDistinctObjectsArray;
-            }
-
-            // Find index.
-            var expressionName = Path.GetFileName(AssetPath).Replace(".json", "");
-            var expressionIndex = -1;
-            for (var i = 0; i < expressionList.CubismExpressionObjects.Length; ++i)
-            {
-                var expression = expressionList.CubismExpressionObjects[i];
-
-                if (expression.name != expressionName)
-                {
-                    continue;
-                }
-
-                expressionIndex = i;
-                break;
-            }
-
-            // Set expression data.
-            if (expressionIndex != -1)
-            {
-                expressionList.CubismExpressionObjects[expressionIndex] = expressionData;
-            }
-            else
-            {
-                expressionIndex = expressionList.CubismExpressionObjects.Length;
-                Array.Resize(ref expressionList.CubismExpressionObjects, expressionIndex + 1);
-                expressionList.CubismExpressionObjects[expressionIndex] = expressionData;
-            }
-
-            EditorUtility.SetDirty(expressionList);
-
+            // Create expression data.
+            CubismExpressionData expressionData = CubismExpressionData.CreateInstance(ExpressionJson);
+            ctx.AddObjectToAsset("expressionData", expressionData);
+            ctx.SetMainObject(expressionData);
         }
-
 
         /// <summary>
         /// Set expression list.
         /// </summary>
         /// <param name="importer">Event source.</param>
         /// <param name="model">Imported model.</param>
-        private static void OnModelImport(CubismImporter.ModelImportContext ctx, CubismModel model)
+        private static void OnModelImport(IModelImportContext ctx)
         {
-            var expressionController = model.GetComponent<CubismExpressionController>();
-            if (expressionController == null || ctx.Model3Json.FileReferences.Expressions == null)
+            if (ctx.Model3Json.FileReferences.Expressions?.Any() != true)
             {
                 return;
             }
 
-            var modelDir = Path.GetDirectoryName(ctx.AssetPath).Replace("\\","/");
-            var modelName = Path.GetFileName(modelDir);
-            var expressionListPath = modelDir + "/" + modelName + ".expressionList.asset";
+            var expressionController = ctx.Model.gameObject.GetOrAddComponent<CubismExpressionController>();
+            var expressionList = ScriptableObject.CreateInstance<CubismExpressionList>();
+            expressionList.name = $"{ctx.ModelName}.expressionList";
+            ctx.AddSubObject(expressionList);
 
-            var expressionList = GetExpressionList(expressionListPath);
+            var directoryName = Path.GetDirectoryName(ctx.AssetPath);
 
-            if (expressionList == null)
+            var expressionFiles = Directory.EnumerateFiles(directoryName, "*.exp3.json", SearchOption.AllDirectories)
+                .ToDictionary(path => Path.GetFileName(path));
+            var expressionDataList = new List<CubismExpressionData>();
+            foreach (var expression in ctx.Model3Json.FileReferences.Expressions)
             {
-                return;
+                if (!expressionFiles.TryGetValue(expression.File, out var path))
+                {
+                    Debug.LogWarning($"Unable to find expression: {expression.File}");
+                    continue;
+                }
+
+                var expressionData = AssetDatabase.LoadAssetAtPath<CubismExpressionData>(path);
+                if (expressionData != null)
+                {
+                    expressionDataList.Add(expressionData);
+                }
+                else
+                {
+                    Debug.LogWarning($"Unable to load expression: {path}");
+                }
+                ctx.ImporterContext.DependsOnArtifact(path);
             }
 
+            expressionList.CubismExpressionObjects = expressionDataList.ToArray();
             expressionController.ExpressionsList = expressionList;
         }
 
