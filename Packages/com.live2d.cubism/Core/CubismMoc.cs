@@ -82,7 +82,7 @@ namespace Live2D.Cubism.Core
         /// <summary>
         /// <see cref="Bytes"/> backing field.
         /// </summary>
-        [SerializeField,HideInInspector]
+        [SerializeField, HideInInspector]
         private byte[] _bytes;
 
         private CubismUnmanagedMoc UnmanagedMoc { get; set; }
@@ -141,7 +141,7 @@ namespace Live2D.Cubism.Core
         /// </summary>
         public void ReleaseUnmanagedMoc()
         {
-            -- ReferenceCount;
+            --ReferenceCount;
 
 
             // Release instance of unmanaged moc in case the instance isn't referenced any longer.

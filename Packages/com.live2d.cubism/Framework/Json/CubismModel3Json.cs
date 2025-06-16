@@ -389,8 +389,9 @@ namespace Live2D.Cubism.Framework.Json
             model.name = Path.GetFileNameWithoutExtension(FileReferences.Moc);
 
 #if UNITY_EDITOR
-            model.gameObject.AddComponent<CubismParametersInspector>();
-            model.gameObject.AddComponent<CubismPartsInspector>();
+            // Add parameters and parts inspectors.
+            model.gameObject.AddComponent<CubismParametersInspector>().hideFlags = HideFlags.DontSaveInBuild;
+            model.gameObject.AddComponent<CubismPartsInspector>().hideFlags = HideFlags.DontSaveInBuild;
 #endif
 
             return model;
