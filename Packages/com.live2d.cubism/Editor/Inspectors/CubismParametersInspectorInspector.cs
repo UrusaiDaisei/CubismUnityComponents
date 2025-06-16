@@ -314,7 +314,6 @@ namespace Live2D.Cubism.Editor.Inspectors
         {
             label.tooltip = "Ctrl+Click to highlight in hierarchy";
             label.AddToClassList("parameter-label");
-
             label.RegisterCallback<MouseDownEvent>(evt =>
             {
                 if (!evt.ctrlKey) return;
@@ -322,7 +321,7 @@ namespace Live2D.Cubism.Editor.Inspectors
                 EditorGUIUtility.PingObject(parameter);
                 Selection.activeObject = parameter;
                 evt.StopPropagation();
-            });
+            }, TrickleDown.TrickleDown);
         }
 
         private void CreateCombinedParameterControl(CubismParameter horizontalParam, CubismParameter verticalParam, VisualElement container)

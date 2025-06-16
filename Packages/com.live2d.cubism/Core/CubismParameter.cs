@@ -16,7 +16,7 @@ namespace Live2D.Cubism.Core
     /// <summary>
     /// Single <see cref="CubismModel"/> parameter.
     /// </summary>
-    [CubismDontMoveOnReimport]
+    [CubismDontMoveOnReimport, DisallowMultipleComponent]
     public sealed class CubismParameter : MonoBehaviour
     {
         #region Factory Methods

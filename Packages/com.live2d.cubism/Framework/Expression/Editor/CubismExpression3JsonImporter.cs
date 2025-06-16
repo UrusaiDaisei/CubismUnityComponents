@@ -42,10 +42,10 @@ namespace Live2D.Cubism.Editor.Importers
         public override void OnImportAsset(AssetImportContext ctx)
         {
             var parentDirectory = Path.GetDirectoryName(ctx.assetPath);
-            var model3JsonPath = Directory.EnumerateFiles(parentDirectory, "*.model3.json").FirstOrDefault();
+            var model3JsonPath = FindModel3JsonFile(parentDirectory);
             if (model3JsonPath == null)
             {
-                ctx.LogImportError("unable to find model3json file.");
+                ctx.LogImportError("unable to find model3json file in current directory or parent directories.");
                 return;
             }
 
@@ -56,6 +56,30 @@ namespace Live2D.Cubism.Editor.Importers
             CubismExpressionData expressionData = CubismExpressionData.CreateInstance(ExpressionJson);
             ctx.AddObjectToAsset("expressionData", expressionData);
             ctx.SetMainObject(expressionData);
+        }
+
+        /// <summary>
+        /// Searches for a model3.json file in the current directory and its parent directories.
+        /// </summary>
+        /// <param name="startDirectory">The directory to start searching from.</param>
+        /// <returns>The path to the model3.json file, or null if not found.</returns>
+        private string FindModel3JsonFile(string startDirectory)
+        {
+            var currentDirectory = startDirectory;
+
+            while (currentDirectory != null)
+            {
+                var model3JsonPath = Directory.EnumerateFiles(currentDirectory, "*.model3.json").FirstOrDefault();
+                if (model3JsonPath != null)
+                {
+                    return model3JsonPath;
+                }
+
+                // Move up to parent directory
+                currentDirectory = Path.GetDirectoryName(currentDirectory);
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -77,27 +101,30 @@ namespace Live2D.Cubism.Editor.Importers
 
             var directoryName = Path.GetDirectoryName(ctx.AssetPath);
 
+            /*
             var expressionFiles = Directory.EnumerateFiles(directoryName, "*.exp3.json", SearchOption.AllDirectories)
                 .ToDictionary(path => Path.GetFileName(path));
+            */
             var expressionDataList = new List<CubismExpressionData>();
             foreach (var expression in ctx.Model3Json.FileReferences.Expressions)
             {
-                if (!expressionFiles.TryGetValue(expression.File, out var path))
+                var expressionPath = Path.Combine(directoryName, expression.File);
+                if (!File.Exists(expressionPath))
                 {
                     Debug.LogWarning($"Unable to find expression: {expression.File}");
                     continue;
                 }
 
-                var expressionData = AssetDatabase.LoadAssetAtPath<CubismExpressionData>(path);
+                var expressionData = AssetDatabase.LoadAssetAtPath<CubismExpressionData>(expressionPath);
                 if (expressionData != null)
                 {
                     expressionDataList.Add(expressionData);
                 }
                 else
                 {
-                    Debug.LogWarning($"Unable to load expression: {path}");
+                    Debug.LogWarning($"Unable to load expression: {expressionPath}");
                 }
-                ctx.ImporterContext.DependsOnArtifact(path);
+                ctx.ImporterContext.DependsOnArtifact(expressionPath);
             }
 
             expressionList.CubismExpressionObjects = expressionDataList.ToArray();

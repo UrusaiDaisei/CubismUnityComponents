@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace Live2D.Cubism.Framework.Expression
 {
-    public class CubismExpressionList : ScriptableObject
+    public sealed class CubismExpressionList : ScriptableObject
     {
         /// <summary>
         /// Cubism expression objects.

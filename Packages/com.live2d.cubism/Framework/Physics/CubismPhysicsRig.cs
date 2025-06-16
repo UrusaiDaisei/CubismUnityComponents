@@ -7,6 +7,8 @@
 
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Live2D.Cubism.Core;
 using UnityEngine;
 

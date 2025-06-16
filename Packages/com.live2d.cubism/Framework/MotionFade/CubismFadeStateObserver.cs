@@ -132,6 +132,8 @@ namespace Live2D.Cubism.Framework.MotionFade
         /// <param name="controller">Animation controller playable.</param>
         public override void OnStateEnter(Animator animator, AnimatorStateInfo stateInfo, int layerIndex, AnimatorControllerPlayable controller)
         {
+            return;
+
             var fadeController = animator.gameObject.GetComponent<CubismFadeController>();
 
             // Fail silently...
@@ -191,9 +193,9 @@ namespace Live2D.Cubism.Framework.MotionFade
 
                 var instanceId = -1;
                 var events = animatorClipInfo[i].clip.events;
-                for(var k = 0; k < events.Length; ++k)
+                for (var k = 0; k < events.Length; ++k)
                 {
-                    if(events[k].functionName != "InstanceId")
+                    if (events[k].functionName != "InstanceId")
                     {
                         continue;
                     }

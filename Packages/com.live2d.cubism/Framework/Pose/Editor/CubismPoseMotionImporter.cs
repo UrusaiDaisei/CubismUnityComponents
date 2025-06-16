@@ -103,13 +103,19 @@ namespace Live2D.Cubism.Editor.Importers
                         : AssetDatabase.LoadAssetAtPath<AnimationClip>(animationClipPath)
                     : null;
 
+                var settings = new CubismMotion3Json.AnimationClipImportSettings
+                {
+                    shouldImportAsOriginalWorkflow = shouldImportAsOriginalWorkflow,
+                    shouldClearAnimationCurves = shouldClearAnimationCurves
+                };
+
                 if (animationClip == null)
                 {
-                    animationClip = motion3Json.ToAnimationClip(null, shouldImportAsOriginalWorkflow, shouldClearAnimationCurves, true, pose3Json);
+                    animationClip = motion3Json.ToAnimationClip(null, settings, true, pose3Json);
                 }
                 else
                 {
-                    motion3Json.FillAnimationClip(animationClip, null, shouldImportAsOriginalWorkflow, shouldClearAnimationCurves, true, pose3Json);
+                    motion3Json.FillAnimationClip(animationClip, null, settings, true, pose3Json);
                 }
 
                 animationClip.name = animationName;

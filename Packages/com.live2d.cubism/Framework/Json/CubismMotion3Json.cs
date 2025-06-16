@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using Live2D.Cubism.Core;
 using Live2D.Cubism.Framework.MouthMovement;
 using Live2D.Cubism.Rendering;
@@ -200,6 +201,14 @@ namespace Live2D.Cubism.Framework.Json
             return new AnimationCurve(ConvertCurveSegmentsToKeyframes(segments));
         }
 
+        public ref struct AnimationClipImportSettings
+        {
+            public bool shouldImportAsOriginalWorkflow;
+            public bool shouldClearAnimationCurves;
+
+            public bool? OverrideLoop;
+        }
+
 
         /// <summary>
         /// Instantiates an <see cref="AnimationClip"/>.
@@ -212,7 +221,7 @@ namespace Live2D.Cubism.Framework.Json
         /// <remarks>
         /// Note this method generates <see cref="AnimationClip.legacy"/> clips when called at runtime.
         /// </remarks>
-        public AnimationClip ToAnimationClip(GameObject modelGameObject, bool shouldImportAsOriginalWorkflow = false, bool shouldClearAnimationCurves = false,
+        public AnimationClip ToAnimationClip(GameObject modelGameObject, AnimationClipImportSettings settings = default,
                                              bool isCallFormModelJson = false, CubismPose3Json poseJson = null)
         {
             // Check béziers restriction flag.
@@ -236,7 +245,7 @@ namespace Live2D.Cubism.Framework.Json
 #endif
             };
 
-            FillAnimationClip(animationClip, modelGameObject, shouldImportAsOriginalWorkflow, shouldClearAnimationCurves, isCallFormModelJson, poseJson);
+            FillAnimationClip(animationClip, modelGameObject, settings, isCallFormModelJson, poseJson);
             return animationClip;
         }
 
@@ -252,11 +261,11 @@ namespace Live2D.Cubism.Framework.Json
         /// <remarks>
         /// Note this method generates <see cref="AnimationClip.legacy"/> clips when called at runtime.
         /// </remarks>
-        public void FillAnimationClip(AnimationClip animationClip, GameObject modelGameObject, bool shouldImportAsOriginalWorkflow = false, bool shouldClearAnimationCurves = false
+        public void FillAnimationClip(AnimationClip animationClip, GameObject modelGameObject, AnimationClipImportSettings settings = default
                                                                         , bool isCallFormModelJson = false, CubismPose3Json poseJson = null)
         {
             // Clear curves.
-            if (!shouldImportAsOriginalWorkflow || (isCallFormModelJson && shouldImportAsOriginalWorkflow && shouldClearAnimationCurves))
+            if (!settings.shouldImportAsOriginalWorkflow || (isCallFormModelJson && settings.shouldImportAsOriginalWorkflow && settings.shouldClearAnimationCurves))
             {
                 animationClip.ClearCurves();
             }
@@ -274,7 +283,7 @@ namespace Live2D.Cubism.Framework.Json
                         modelGameObject.GetComponentsInChildren(true, buffer);
                         foreach (var parameter in buffer)
                         {
-                            var relativePath = AnimationUtility.CalculateTransformPath(parameter.transform, root);
+                            var relativePath = CalculateTransformPath(parameter.transform, root);
                             parameterPaths[parameter.Id] = relativePath;
                         }
                     }
@@ -300,7 +309,7 @@ namespace Live2D.Cubism.Framework.Json
                         modelGameObject.GetComponentsInChildren(true, buffer);
                         foreach (var part in buffer)
                         {
-                            var relativePath = AnimationUtility.CalculateTransformPath(part.transform, root);
+                            var relativePath = CalculateTransformPath(part.transform, root);
                             partPaths[part.Id] = relativePath;
                         }
                     }
@@ -385,7 +394,7 @@ namespace Live2D.Cubism.Framework.Json
                 var curve = Curves[i];
 
                 // If should import as original workflow mode, skip add part opacity curve when call not from model3.json.
-                if (curve.Target == "PartOpacity" && shouldImportAsOriginalWorkflow && !isCallFormModelJson)
+                if (curve.Target == "PartOpacity" && settings.shouldImportAsOriginalWorkflow && !isCallFormModelJson)
                 {
                     continue;
                 }
@@ -404,7 +413,7 @@ namespace Live2D.Cubism.Framework.Json
                     case "PartOpacity":
                         binding = handelPartOpacityCurve(curve);
                         // original workflow.
-                        if (shouldImportAsOriginalWorkflow && poseJson != null && poseJson.FadeInTime != 0.0f)
+                        if (settings.shouldImportAsOriginalWorkflow && poseJson != null && poseJson.FadeInTime != 0.0f)
                             animationCurve = ConvertSteppedCurveToLinerCurver(curve, poseJson.FadeInTime);
 
                         break;
@@ -420,39 +429,48 @@ namespace Live2D.Cubism.Framework.Json
             // Apply settings.
             var animationClipSettings = new AnimationClipSettings
             {
-                loopTime = Meta.Loop,
+                loopTime = settings.OverrideLoop ?? Meta.Loop,
                 stopTime = Meta.Duration
             };
-
 
             AnimationUtility.SetAnimationClipSettings(animationClip, animationClipSettings);
 #endif
 
+            FillAnimationUserData(animationClip);
+        }
+
+        private void FillAnimationUserData(AnimationClip animationClip)
+        {
+            if (UserData == null)
+                return;
+
+            static AnimationEvent buildEvent(in SerializableUserData data)
+            {
+                return new AnimationEvent
+                {
+                    time = data.Time,
+                    functionName = data.Value
+                };
+            }
 
 #if UNITY_EDITOR
-            // Add animation events from user data.
-            if (UserData != null)
+            var animationEvents = ListPool<AnimationEvent>.Get();
+            try
             {
-                var animationEvents = new List<AnimationEvent>();
-
-
-                for (var i = 0; i < UserData.Length; ++i)
+                foreach (var userData in UserData)
                 {
-                    var animationEvent = new AnimationEvent
-                    {
-                        time = UserData[i].Time,
-                        stringParameter = UserData[i].Value,
-                    };
-
-
-                    animationEvents.Add(animationEvent);
+                    animationEvents.Add(buildEvent(userData));
                 }
-
-
-                if (animationEvents.Count > 0)
-                {
-                    AnimationUtility.SetAnimationEvents(animationClip, animationEvents.ToArray());
-                }
+                AnimationUtility.SetAnimationEvents(animationClip, animationEvents.ToArray());
+            }
+            finally
+            {
+                ListPool<AnimationEvent>.Release(animationEvents);
+            }
+#else
+            foreach (var userData in UserData)
+            {
+                animationClip.AddEvent(buildEvent(userData));
             }
 #endif
         }
@@ -649,6 +667,27 @@ namespace Live2D.Cubism.Framework.Json
 
             // Update position.
             position += 3;
+        }
+
+        private static string CalculateTransformPath(Transform target, Transform root)
+        {
+            var list = ListPool<string>.Get();
+            try
+            {
+                do
+                {
+                    list.Add(target.name);
+                    target = target.parent;
+                }
+                while (target != root && target != null);
+
+                list.Reverse();
+                return string.Join('/', list);
+            }
+            finally
+            {
+                ListPool<string>.Release(list);
+            }
         }
 
         #endregion
