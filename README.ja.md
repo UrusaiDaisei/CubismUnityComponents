@@ -54,15 +54,15 @@ Unity Editor拡張機能は、`./Assets/Live2D/Cubism/Editor`にあります。
 
 | Unity | バージョン |
 | --- | --- |
-| Latest | 6000.0.49f1 |
-| LTS | 2022.3.61f1 |
+| Latest | 6000.2.6f2 |
+| LTS | 6000.0.58f2 |
 
 | ライブラリ / ツール | バージョン |
 | --- | --- |
 | Android SDK / NDK | *2 |
-| Visual Studio 2022 | 17.14.2 |
-| Windows SDK | 11.0.26100.3916 |
-| Xcode | 16.1 |
+| Visual Studio 2022 | 17.14.16 |
+| Windows SDK | 10.0.26100.6584 |
+| Xcode | 26.1 |
 
 *2 Unityに組み込まれたライブラリまたは推奨ライブラリを使用してください。
 
@@ -88,18 +88,15 @@ https://docs.unity3d.com/ja/2018.4/Manual/CSharpCompiler.html
 | プラットフォーム | バージョン |
 | --- | --- |
 | Android | 16 |
-| iOS | 18.5 |
-| iPadOS | 18.5 |
-| Ubuntu | 24.04.2 |
-| macOS | 15.5 |
+| iOS | 26.0.1 |
+| iPadOS | 26.0.1 |
+| Ubuntu | 24.04.3 |
+| macOS | 26.0 |
 | Windows 11 | 24H2 (*4) |
-| Google Chrome | 131.0.6778.86 |
-| Chrome OS x86_64 | 130.0.6723.126 |
-| Chrome OS ARMv8 (*5) | 130.0.6723.126　|
+| Google Chrome | 141.0.7390.66 |
 | HarmonyOS NEXT | 5.0.0.102 |
 
-*4 Unity6ではUWP向けビルドは動作確認をしておりません。
-*5 Android向けAPKファイルでの動作確認です。
+*4 UWP向けビルドは動作確認をしておりません。
 
 ## ブランチ
 
