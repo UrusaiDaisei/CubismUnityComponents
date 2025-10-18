@@ -5,30 +5,24 @@
  * that can be found at https://www.live2d.com/eula/live2d-open-software-license-agreement_en.html.
  */
 
-// Framework-level imports
+
+using Live2D.Cubism.Core;
 using System;
 using System.IO;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
+using Live2D.Cubism.Framework.MouthMovement;
+using Live2D.Cubism.Framework.Physics;
+using Live2D.Cubism.Framework.UserData;
+using Live2D.Cubism.Framework.Pose;
+using Live2D.Cubism.Framework.Expression;
+using Live2D.Cubism.Framework.MotionFade;
+using Live2D.Cubism.Framework.Raycasting;
+using Live2D.Cubism.Rendering;
+using Live2D.Cubism.Rendering.Masking;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
-using System.Runtime.CompilerServices;
+using UnityEngine;
 
-// Cubism Core imports
-using Live2D.Cubism.Core;
-using Live2D.Cubism.Rendering;
-using Live2D.Cubism.Rendering.Masking;
-
-// Cubism Framework imports
-using Live2D.Cubism.Framework.Expression;
-using Live2D.Cubism.Framework.MotionFade;
-using Live2D.Cubism.Framework.MouthMovement;
-using Live2D.Cubism.Framework.Physics;
-using Live2D.Cubism.Framework.Pose;
-using Live2D.Cubism.Framework.Raycasting;
-using Live2D.Cubism.Framework.UserData;
 
 namespace Live2D.Cubism.Framework.Json
 {
@@ -39,6 +33,8 @@ namespace Live2D.Cubism.Framework.Json
     // ReSharper disable once ClassCannotBeInstantiated
     public sealed class CubismModel3Json
     {
+        public static readonly string ModelCanvasName = "ModelCanvas";
+
         #region Delegates
 
         /// <summary>
@@ -55,8 +51,9 @@ namespace Live2D.Cubism.Framework.Json
         /// </summary>
         /// <param name="sender">Event source.</param>
         /// <param name="drawable">Drawable to pick for.</param>
+        /// <param name="isUsingBlendMode">Is model's moc version after Cubism 5.3?</param>
         /// <returns>Picked material.</returns>
-        public delegate Material MaterialPicker(CubismModel3Json sender, CubismDrawable drawable);
+        public delegate Material DrawableMaterialPicker(CubismModel3Json sender, CubismDrawable drawable, bool isUsingBlendMode);
 
         /// <summary>
         /// Picks a <see cref="Texture2D"/> for a <see cref="CubismDrawable"/>.
@@ -65,6 +62,14 @@ namespace Live2D.Cubism.Framework.Json
         /// <param name="drawable">Drawable to pick for.</param>
         /// <returns>Picked texture.</returns>
         public delegate Texture2D TexturePicker(CubismModel3Json sender, CubismDrawable drawable);
+
+        /// <summary>
+        /// Picks a <see cref="Material"/> for a <see cref="CubismOffscreen"/>.
+        /// </summary>
+        /// <param name="sender">Event source.</param>
+        /// <param name="offscreen">Offscreen to pick for.</param>
+        /// <returns></returns>
+        public delegate Material OffscreenMaterialPicker(CubismModel3Json sender, CubismOffscreen offscreen);
 
         #endregion
 
@@ -78,7 +83,7 @@ namespace Live2D.Cubism.Framework.Json
         public static CubismModel3Json LoadAtPath(string assetPath)
         {
             // Use default asset load handler.
-            return LoadAtPath(assetPath, GetBuiltinLoadAssetAtPath());
+            return LoadAtPath(assetPath, BuiltinLoadAssetAtPath);
         }
 
         /// <summary>
@@ -210,6 +215,20 @@ namespace Live2D.Cubism.Framework.Json
         #endregion
 
         /// <summary>
+        /// The contents of the referenced moc3 asset.
+        /// </summary>
+        /// <remarks>
+        /// The contents isn't cached internally.
+        /// </remarks>
+        public byte[] Moc3
+        {
+            get
+            {
+                return LoadReferencedAsset<byte[]>(FileReferences.Moc);
+            }
+        }
+
+        /// <summary>
         /// <see cref="CubismPose3Json"/> backing field.
         /// </summary>
         [NonSerialized]
@@ -222,7 +241,7 @@ namespace Live2D.Cubism.Framework.Json
         {
             get
             {
-                if (_pose3Json != null)
+                if(_pose3Json != null)
                 {
                     return _pose3Json;
                 }
@@ -250,7 +269,7 @@ namespace Live2D.Cubism.Framework.Json
             get
             {
                 // Fail silently...
-                if (FileReferences.Expressions == null)
+                if(FileReferences.Expressions == null)
                 {
                     return null;
                 }
@@ -348,45 +367,46 @@ namespace Live2D.Cubism.Framework.Json
         #endregion
 
         /// <summary>
+        /// Instantiates a <see cref="CubismMoc">model source</see> and a <see cref="CubismModel">model</see> with the default texture set.
+        /// </summary>
+        /// <param name="shouldImportAsOriginalWorkflow">Should import as original workflow.</param>
+        /// <returns>The instantiated <see cref="CubismModel">model</see> on success; <see langword="null"/> otherwise.</returns>
+        public CubismModel ToModel(bool shouldImportAsOriginalWorkflow = false)
+        {
+            return ToModel(CubismBuiltinPickers.DrawableMaterialPicker, CubismBuiltinPickers.TexturePicker, CubismBuiltinPickers.OffscreenMaterialPicker,shouldImportAsOriginalWorkflow);
+        }
+
+        /// <summary>
         /// Instantiates a <see cref="CubismMoc">model source</see> and a <see cref="CubismModel">model</see>.
         /// </summary>
-        /// <param name="pickMaterial">The material mapper to use.</param>
+        /// <param name="pickDrawableMaterial">The material mapper to use.</param>
         /// <param name="pickTexture">The texture mapper to use.</param>
         /// <param name="shouldImportAsOriginalWorkflow">Should import as original workflow.</param>
         /// <returns>The instantiated <see cref="CubismModel">model</see> on success; <see langword="null"/> otherwise.</returns>
-        public CubismModel ToModel(CubismMoc moc, MaterialPicker pickMaterial, TexturePicker pickTexture, bool shouldImportAsOriginalWorkflow)
+        public CubismModel ToModel(DrawableMaterialPicker pickDrawableMaterial, TexturePicker pickTexture, OffscreenMaterialPicker pickOffscreenMaterial, bool shouldImportAsOriginalWorkflow = false)
         {
-            var model = CreateAndInitializeModel(moc);
-            if (model == null) return null;
+            // Initialize model source and instantiate it.
+            var mocAsBytes = Moc3;
 
-            // Load display info once
-            var displayInfo = CubismDisplayInfo3Json.LoadFrom(DisplayInfo3Json);
 
-            // Initialize components in the correct order
-            InitializeRenderers(model, pickMaterial, pickTexture);
-            InitializeParameters(model, displayInfo);
-            InitializeParts(model, displayInfo);
-            InitializeHitAreas(model);
-            InitializePhysics(model);
-            InitializeUserData(model);
-
-            if (shouldImportAsOriginalWorkflow)
+            if (mocAsBytes == null)
             {
-                InitializeOriginalWorkflow(model);
+                return null;
             }
 
-            model.gameObject.GetOrAddComponent<Animator>();
-            model.ForceUpdateNow();
 
-            return model;
-        }
+            var moc = CubismMoc.CreateFrom(mocAsBytes);
 
-        private CubismModel CreateAndInitializeModel(CubismMoc moc)
-        {
+
             var model = CubismModel.InstantiateFrom(moc);
-            if (model == null) return null;
+
+            if (model == null)
+            {
+                return null;
+            }
 
             model.name = Path.GetFileNameWithoutExtension(FileReferences.Moc);
+
 
 #if UNITY_EDITOR
             // Add parameters and parts inspectors.
@@ -394,250 +414,443 @@ namespace Live2D.Cubism.Framework.Json
             model.gameObject.AddComponent<CubismPartsInspector>().hideFlags = HideFlags.DontSaveInBuild;
 #endif
 
-            return model;
-        }
-
-        private void InitializeRenderers(CubismModel model, MaterialPicker pickMaterial, TexturePicker pickTexture)
-        {
+            // Create renderers.
             var rendererController = model.gameObject.AddComponent<CubismRenderController>();
+
+            if (model.IsUsingBlendMode)
+            {
+                if (model.transform.Find(ModelCanvasName) == null)
+                {
+                    // Prefabをロード
+                    var canvasPrefab = Resources.Load<GameObject>($"Live2D/Cubism/Prefabs/{ModelCanvasName}");
+
+                    if (canvasPrefab != null)
+                    {
+                        // Prefabをインスタンス化
+                        var instance = GameObject.Instantiate(canvasPrefab);
+                        if (instance != null)
+                        {
+                            // インスタンスのTransformを親に設定
+                            instance.transform.SetParent(model.transform, false);
+                            instance.name = ModelCanvasName;
+
+                            // Create ModelCanvas
+                            var meshFilter = instance.GetComponent<MeshFilter>();
+                            var quadWidth = model.CanvasInformation.CanvasWidth / model.CanvasInformation.PixelsPerUnit;
+                            var quadHeight = model.CanvasInformation.CanvasHeight / model.CanvasInformation.PixelsPerUnit;
+                            var halfquadWidth = quadWidth * 0.5f;
+                            var halfquadHeight = quadHeight * 0.5f;
+
+                            var vertices = new Vector3[4]
+                            {
+                                new Vector3(-halfquadWidth, -halfquadHeight, 0),
+                                new Vector3(-halfquadWidth, halfquadHeight, 0),
+                                new Vector3(halfquadWidth, -halfquadHeight, 0),
+                                new Vector3(halfquadWidth, halfquadHeight, 0)
+                            };
+
+                            var tris = new int[6]
+                            {
+                                0, 1, 2,
+                                2, 1, 3
+                            };
+
+                            var normals = new Vector3[4]
+                            {
+                                -Vector3.forward,
+                                -Vector3.forward,
+                                -Vector3.forward,
+                                -Vector3.forward
+                            };
+
+                            var uv = new Vector2[4]
+                            {
+                                new Vector2(0, 0),
+                                new Vector2(0, 1),
+                                new Vector2(1, 0),
+                                new Vector2(1, 1)
+                            };
+
+
+                            var fileName = model.name + ModelCanvasName;
+                            var filePath = Path.Join(Path.GetDirectoryName(AssetPath), fileName);
+
+                            Mesh mesh = null;
+#if UNITY_EDITOR
+                            if (!Application.isPlaying)
+                            {
+                                mesh = AssetDatabase.LoadAssetAtPath<Mesh>(filePath + ".mesh");
+                            }
+#endif
+
+                            if (mesh == null)
+                            {
+                                mesh = new Mesh()
+                                {
+                                    vertices = vertices,
+                                    triangles = tris,
+                                    normals = normals,
+                                    uv = uv
+                                };
+#if UNITY_EDITOR
+                                if (!Application.isPlaying)
+                                {
+                                    AssetDatabase.CreateAsset(mesh, filePath + ".mesh");
+                                }
+#endif
+                            }
+                            else
+                            {
+                                mesh.vertices = vertices;
+                                mesh.triangles = tris;
+                                mesh.normals = normals;
+                                mesh.uv = uv;
+                            }
+
+                            instance.transform.rotation = new Quaternion(0, 0, 0, 0);
+                            meshFilter.mesh = mesh;
+                        }
+                    }
+                }
+
+                rendererController.ModelCanvasRenderer = model.transform.Find(ModelCanvasName).GetComponent<MeshRenderer>();
+                rendererController.TryInitializeFrameBuffers(true);
+            }
+
             var renderers = rendererController.Renderers;
+
             var drawables = model.Drawables;
+            var offscreens = model.Offscreens;
 
-            if (renderers == null || drawables == null) return;
+            var drawableRenderers = rendererController.DrawableRenderers;
+            var offscreenRenderers = rendererController.OffscreenRenderers;
 
-            bool requiresMasking = false;
+            if (renderers == null
+                || drawables  == null
+                || drawableRenderers == null)
+            {
+                return null;
+            }
 
+            // Initialize materials.
+            for (var i = 0; i < drawableRenderers.Length; ++i)
+            {
+                var renderer = drawableRenderers[i];
+
+                renderer.Material = pickDrawableMaterial(this, drawables[i], model.IsUsingBlendMode);
+                if (model.IsUsingBlendMode)
+                {
+                    renderer.ColorBlendType = drawables[i].ColorBlend;
+                    renderer.AlphaBlendType = drawables[i].AlphaBlend;
+                }
+            }
+
+            for (var i = 0; i < offscreenRenderers?.Length; i++)
+            {
+                var renderer = offscreenRenderers[i];
+
+                renderer.Material = pickOffscreenMaterial(this, offscreens[i]);
+                if (model.IsUsingBlendMode)
+                {
+                    renderer.ColorBlendType = offscreens[i].ColorBlend;
+                    renderer.AlphaBlendType = offscreens[i].AlphaBlend;
+                }
+            }
+
+
+            // Initialize textures.
             for (var i = 0; i < renderers.Length; ++i)
             {
-                renderers[i].Material = pickMaterial(this, drawables[i]);
+                if (renderers[i].DrawObjectType != CubismModelTypes.DrawObjectType.Drawable)
+                {
+                    continue;
+                }
                 renderers[i].MainTexture = pickTexture(this, drawables[i]);
-                requiresMasking |= drawables[i].IsMasked;
             }
 
-            if (requiresMasking)
-                model.gameObject.AddComponent<CubismMaskController>();
-        }
 
-        private void InitializeParts(CubismModel model, CubismDisplayInfo3Json displayInfo)
-        {
-            var parts = model.Parts;
-            if (parts == null) return;
-
-            foreach (var part in parts)
+            if (model.Parts != null)
             {
-                // Initialize part colors
-                var partColorsEditor = part.gameObject.AddComponent<CubismPartColorsEditor>();
-                partColorsEditor.TryInitialize(model);
+                var parts = model.Parts;
 
-                // Initialize display info
-                var displayInfoComponent = part.gameObject.AddComponent<CubismDisplayInfoPartName>();
-                displayInfoComponent.Name = part.Id;
-                displayInfoComponent.DisplayName = string.Empty;
-
-                if (displayInfo == null)
-                    continue;
-
-                var foundPart = Array.Find(displayInfo.Parts, p => p.Id == part.Id);
-                if (foundPart.Id != null)
+                // Create and initialize partColorsEditors.
+                for (int i = 0; i < parts.Length; i++)
                 {
-                    displayInfoComponent.DisplayName = foundPart.Name;
+                    var partColorsEditor = parts[i].gameObject.AddComponent<CubismPartColorsEditor>();
+                    partColorsEditor.TryInitialize(model);
                 }
             }
-        }
 
-        private void InitializeParameters(CubismModel model, CubismDisplayInfo3Json displayInfo)
-        {
-            if (model?.Parameters == null) return;
 
-            const string noGroup = "no-group";
-            const string noGroupName = "No Group";
+            // Initialize drawables.
+            if (HitAreas != null)
+            {
+                for (var i = 0; i < HitAreas.Length; i++)
+                {
+                    for (var j = 0; j < drawables.Length; j++)
+                    {
+                        if (drawables[j].Id == HitAreas[i].Id)
+                        {
+                            // Add components for hit judgement to HitArea target Drawables.
+                            var hitDrawable = drawables[j].gameObject.AddComponent<CubismHitDrawable>();
+                            hitDrawable.Name = HitAreas[i].Name;
+
+                            drawables[j].gameObject.AddComponent<CubismRaycastable>();
+                            break;
+                        }
+                    }
+                }
+            }
+
+            //Load from cdi3.json
+            var DisplayInfo3JsonAsString = DisplayInfo3Json;
+            var cdi3Json = CubismDisplayInfo3Json.LoadFrom(DisplayInfo3JsonAsString);
+
+            // Initialize groups.
             var parameters = model.Parameters;
-            var parameterList = new List<CubismDisplayInfoParameterName>(parameters.Length);
 
-            // Initialize display info for parameters
-            foreach (var parameter in parameters)
+            for (var i = 0; i < parameters.Length; ++i)
             {
-                var displayInfoComponent = parameter.gameObject.AddComponent<CubismDisplayInfoParameterName>();
-                parameterList.Add(displayInfoComponent);
-                displayInfoComponent.Name = parameter.Id;
-                displayInfoComponent.DisplayName = string.Empty;
-                displayInfoComponent.GroupId = noGroup;
-
-                if (displayInfo != null)
+                if (IsParameterInGroup(parameters[i], "EyeBlink"))
                 {
-                    var foundParameter = Array.Find(displayInfo.Parameters, p => p.Id == parameter.Id);
-                    if (foundParameter.Id != null)
+                    if (model.gameObject.GetComponent<CubismEyeBlinkController>() == null)
                     {
-                        displayInfoComponent.DisplayName = foundParameter.Name;
-                        displayInfoComponent.GroupId = foundParameter.GroupId;
+                        model.gameObject.AddComponent<CubismEyeBlinkController>();
+                    }
+
+
+                    parameters[i].gameObject.AddComponent<CubismEyeBlinkParameter>();
+                }
+
+
+                // Set up mouth parameters.
+                if (IsParameterInGroup(parameters[i], "LipSync"))
+                {
+                    if (model.gameObject.GetComponent<CubismMouthController>() == null)
+                    {
+                        model.gameObject.AddComponent<CubismMouthController>();
+                    }
+
+
+                    parameters[i].gameObject.AddComponent<CubismMouthParameter>();
+                }
+
+
+                // Setting up the parameter name for display.
+                if (cdi3Json != null)
+                {
+                    var cubismDisplayInfoParameterName = parameters[i].gameObject.AddComponent<CubismDisplayInfoParameterName>();
+                    cubismDisplayInfoParameterName.Name = parameters[i].Id;
+                    for (int j = 0; j < cdi3Json.Parameters.Length; j++)
+                    {
+                        if (cdi3Json.Parameters[j].Id == parameters[i].Id)
+                        {
+                            cubismDisplayInfoParameterName.Name = cdi3Json.Parameters[j].Name;
+                            break;
+                        }
+                    }
+                    cubismDisplayInfoParameterName.DisplayName = string.Empty;
+                }
+            }
+
+            if (cdi3Json != null)
+            {
+                // Setting up the part name for display.
+                // Initialize groups.
+                var parts = model.Parts;
+
+                for (var i = 0; i < parts.Length; i++)
+                {
+                    var cubismDisplayInfoPartNames = parts[i].gameObject.AddComponent<CubismDisplayInfoPartName>();
+                    cubismDisplayInfoPartNames.Name = parts[i].Id;
+                    for (int j = 0; j < cdi3Json.Parts.Length; j++)
+                    {
+                        if (cdi3Json.Parts[j].Id == parts[i].Id)
+                        {
+                            cubismDisplayInfoPartNames.Name = cdi3Json.Parts[j].Name;
+                            break;
+                        }
+                    }
+                    cubismDisplayInfoPartNames.DisplayName = string.Empty;
+                }
+
+                // Get combined parameter information
+                var combinedParameters = cdi3Json.CombinedParameters;
+
+                if (combinedParameters != null)
+                {
+                    // Parameters are always combined in pairs of two.
+                    const int combinedParameterCount = 2;
+
+                    // Set up CubismDisplayInfoCombinedParameterInfo component.
+                    var combinedParameterInfo = model.gameObject.AddComponent<CubismDisplayInfoCombinedParameterInfo>();
+                    combinedParameterInfo.CombinedParameters = new CubismDisplayInfo3Json.CombinedParameter[combinedParameters.Length];
+
+                    for (var index = 0; index < combinedParameters.Length; index++)
+                    {
+                        // Skip if the combined parameter is invalid.
+                        if (combinedParameters[index].Ids == null || combinedParameters[index].Ids.Length != combinedParameterCount)
+                        {
+                            Debug.LogWarning($"The data contains invalid CombinedParameters in {model.Moc.name}.cdi3.json.");
+                            continue;
+                        }
+
+                        var combinedParameterIds = combinedParameters[index].Ids;
+
+                        // Set CombinedParameter.
+                        combinedParameterInfo.CombinedParameters[index] = new CubismDisplayInfo3Json.CombinedParameter
+                        {
+                            HorizontalParameterId = combinedParameterIds[0],
+                            VerticalParameterId = combinedParameterIds[1]
+                        };
                     }
                 }
             }
 
-            // Get Parameters container (created by model)
-            var parametersContainer = model.transform.Find("Parameters").gameObject;
-
-            // Initialize combined parameters if display info exists
-            if (displayInfo?.CombinedParameters != null)
+            // Add mask controller if required.
+            var anyMasked = false;
+            for (var i = 0; i < renderers.Length; i++)
             {
-                const int combinedParameterCount = 2;
-                var combinedParameterInfo = parametersContainer.AddComponent<CubismDisplayInfoCombinedParameterInfo>();
-                combinedParameterInfo.CombinedParameters = new CubismDisplayInfo3Json.CombinedParameter[displayInfo.CombinedParameters.Length];
-
-                for (var i = 0; i < displayInfo.CombinedParameters.Length; i++)
+                var renderer = renderers[i];
+                switch (renderer.DrawObjectType)
                 {
-                    if (displayInfo.CombinedParameters[i].Ids == null || displayInfo.CombinedParameters[i].Ids.Length != combinedParameterCount)
+                    case CubismModelTypes.DrawObjectType.Drawable:
+                        if (renderer.Drawable.IsMasked)
+                        {
+                            anyMasked = true;
+                        }
+                        break;
+                    case CubismModelTypes.DrawObjectType.Offscreen:
+                        if (renderer.Offscreen.IsMasked)
+                        {
+                            anyMasked = true;
+                        }
+                        break;
+                    default:
+                        Debug.LogWarning($"Unknown draw object type {renderer.DrawObjectType} in {model.name}.model3.json.");
+                        break;
+                }
+
+                if (anyMasked)
+                {
+                    // Add controller exactly once...
+                    rendererController.MaskController = model.gameObject.AddComponent<CubismMaskController>();
+
+                    if (model.IsUsingBlendMode)
                     {
-                        Debug.LogWarning($"The data contains invalid CombinedParameters in {model.Moc.name}.cdi3.json.");
-                        continue;
+                        rendererController.TryInitializeRenderers();
                     }
+                    // Already have a mask controller, no need to add it again.
+                    break;
+                }
+            }
 
-                    combinedParameterInfo.CombinedParameters[i] = new CubismDisplayInfo3Json.CombinedParameter
+            // Add original workflow component if is original workflow.
+            if(shouldImportAsOriginalWorkflow)
+            {
+                // Add cubism update manager.
+                var updateManager = model.gameObject.GetComponent<CubismUpdateController>();
+
+                if(updateManager == null)
+                {
+                    model.gameObject.AddComponent<CubismUpdateController>();
+                }
+
+                // Add parameter store.
+                var parameterStore = model.gameObject.GetComponent<CubismParameterStore>();
+
+                if(parameterStore == null)
+                {
+                    parameterStore = model.gameObject.AddComponent<CubismParameterStore>();
+                }
+
+                // Add pose controller.
+                var poseController = model.gameObject.GetComponent<CubismPoseController>();
+
+                if(poseController == null)
+                {
+                    poseController = model.gameObject.AddComponent<CubismPoseController>();
+                }
+
+                // Add expression controller.
+                var expressionController = model.gameObject.GetComponent<CubismExpressionController>();
+
+                if(expressionController == null)
+                {
+                    expressionController = model.gameObject.AddComponent<CubismExpressionController>();
+                }
+
+
+                // Add fade controller.
+                var motionFadeController = model.gameObject.GetComponent<CubismFadeController>();
+
+                if(motionFadeController == null)
+                {
+                    motionFadeController = model.gameObject.AddComponent<CubismFadeController>();
+                }
+
+            }
+
+
+            // Initialize physics if JSON exists.
+            var physics3JsonAsString = Physics3Json;
+
+
+            if (!string.IsNullOrEmpty(physics3JsonAsString))
+            {
+                var physics3Json = CubismPhysics3Json.LoadFrom(physics3JsonAsString);
+                var physicsController = model.gameObject.GetComponent<CubismPhysicsController>();
+
+                if (physicsController == null)
+                {
+                    physicsController = model.gameObject.AddComponent<CubismPhysicsController>();
+
+                }
+
+                physicsController.Initialize(physics3Json.ToRig());
+            }
+
+
+            var userData3JsonAsString = UserData3Json;
+
+
+            if (!string.IsNullOrEmpty(userData3JsonAsString))
+            {
+                var userData3Json = CubismUserData3Json.LoadFrom(userData3JsonAsString);
+
+
+                var drawableBodies = userData3Json.ToBodyArray(CubismUserDataTargetType.ArtMesh);
+
+                for (var i = 0; i < drawables.Length; ++i)
+                {
+                    var index = GetBodyIndexById(drawableBodies, drawables[i].Id);
+
+                    if (index >= 0)
                     {
-                        HorizontalParameterId = displayInfo.CombinedParameters[i].Ids[0],
-                        VerticalParameterId = displayInfo.CombinedParameters[i].Ids[1]
-                    };
+                        var tag = drawables[i].gameObject.GetComponent<CubismUserDataTag>();
+
+
+                        if (tag == null)
+                        {
+                            tag = drawables[i].gameObject.AddComponent<CubismUserDataTag>();
+                        }
+
+
+                        tag.Initialize(drawableBodies[index]);
+                    }
                 }
             }
 
-            var groupsManager = parametersContainer.AddComponent<CubismParameterGroups>();
-
-            // Group parameters by their GroupId
-            var parameterGroups = parameterList.GroupBy(p => p.GroupId).ToList();
-            var groups = new List<CubismParameterGroups.ParameterGroup>(parameterGroups.Count());
-            var noGroupParameters = new List<CubismDisplayInfoParameterName>();
-
-            // Process each group
-            foreach (var group in parameterGroups)
+            if (model.gameObject.GetComponent<Animator>() == null)
             {
-                if (displayInfo?.ParameterGroups == null)
-                {
-                    noGroupParameters.AddRange(group);
-                    continue;
-                }
-
-                var groupInfo = Array.Find(displayInfo.ParameterGroups, g => g.Id == group.Key);
-                if (groupInfo.Id == null)
-                {
-                    noGroupParameters.AddRange(group);
-                    continue;
-                }
-
-                var groupObject = new GameObject(groupInfo.Name);
-                groups.Add(new CubismParameterGroups.ParameterGroup
-                {
-                    Id = groupInfo.Id,
-                    Name = groupInfo.Name,
-                    Parameters = group.ToArray()
-                });
-
-                groupObject.transform.SetParent(parametersContainer.transform);
-
-                // Parent parameters to group
-                foreach (var parameter in group)
-                {
-                    parameter.transform.SetParent(groupObject.transform, false);
-                }
+                model.gameObject.AddComponent<Animator>();
             }
 
-            // Handle ungrouped parameters
-            if (noGroupParameters.Count > 0)
-            {
-                var noGroupObject = new GameObject(noGroupName);
-                noGroupObject.transform.SetParent(parametersContainer.transform);
+            // Make sure model is 'fresh'
+            model.ForceUpdateNow();
 
-                groups.Add(new CubismParameterGroups.ParameterGroup
-                {
-                    Id = noGroup,
-                    Name = noGroupName,
-                    Parameters = noGroupParameters.ToArray()
-                });
 
-                foreach (var parameter in noGroupParameters)
-                {
-                    parameter.transform.SetParent(noGroupObject.transform, false);
-                }
-            }
-
-            groupsManager.Groups = groups.ToArray();
-
-            // Handle special groups after groups are set up
-            if (groups.Count == 0) return;
-
-            // Handle EyeBlink group
-            var eyeBlinkGroup = groups.Find(g => g.Name == "EyeBlink");
-            if (eyeBlinkGroup.Parameters != null && eyeBlinkGroup.Parameters.Length > 0)
-            {
-                var controller = model.gameObject.GetOrAddComponent<CubismEyeBlinkController>();
-                foreach (var parameter in eyeBlinkGroup.Parameters)
-                {
-                    parameter.gameObject.AddComponent<CubismEyeBlinkParameter>();
-                }
-            }
-
-            // Handle LipSync group
-            var lipSyncGroup = groups.Find(g => g.Name == "LipSync");
-            if (lipSyncGroup.Parameters != null && lipSyncGroup.Parameters.Length > 0)
-            {
-                var controller = model.gameObject.GetOrAddComponent<CubismMouthController>();
-                foreach (var parameter in lipSyncGroup.Parameters)
-                {
-                    parameter.gameObject.AddComponent<CubismMouthParameter>();
-                }
-            }
-        }
-
-        private void InitializeHitAreas(CubismModel model)
-        {
-            if (HitAreas == null) return;
-
-            var drawables = model.Drawables;
-            foreach (var hitArea in HitAreas)
-            {
-                var drawable = Array.Find(drawables, d => d.Id == hitArea.Id);
-                if (drawable == null) continue;
-
-                var hitDrawable = drawable.gameObject.AddComponent<CubismHitDrawable>();
-                hitDrawable.Name = hitArea.Name;
-                drawable.gameObject.AddComponent<CubismRaycastable>();
-            }
-        }
-
-        private void InitializePhysics(CubismModel model)
-        {
-            var physics3JsonString = Physics3Json;
-            if (string.IsNullOrEmpty(physics3JsonString)) return;
-
-            var physics3Json = CubismPhysics3Json.LoadFrom(physics3JsonString);
-            var physicsController = model.gameObject.GetOrAddComponent<CubismPhysicsController>();
-            physicsController.Initialize(physics3Json.ToRig());
-        }
-
-        private void InitializeUserData(CubismModel model)
-        {
-            var userData3JsonString = UserData3Json;
-            if (string.IsNullOrEmpty(userData3JsonString)) return;
-
-            var userData3Json = CubismUserData3Json.LoadFrom(userData3JsonString);
-            var drawableBodies = userData3Json.ToBodyArray(CubismUserDataTargetType.ArtMesh);
-
-            foreach (var drawable in model.Drawables)
-            {
-                var index = Array.FindIndex(drawableBodies, body => body.Id == drawable.Id);
-                if (index < 0) continue;
-
-                var tag = drawable.gameObject.GetOrAddComponent<CubismUserDataTag>();
-                tag.Initialize(drawableBodies[index]);
-            }
-        }
-
-        private void InitializeOriginalWorkflow(CubismModel model)
-        {
-            model.gameObject.GetOrAddComponent<CubismUpdateController>();
-            model.gameObject.GetOrAddComponent<CubismParameterStore>();
-            model.gameObject.GetOrAddComponent<CubismPoseController>();
-            model.gameObject.GetOrAddComponent<CubismExpressionController>();
-            model.gameObject.GetOrAddComponent<CubismFadeController>();
+            return model;
         }
 
         #region Helper Methods
@@ -658,58 +871,108 @@ namespace Live2D.Cubism.Framework.Json
 
 
         /// <summary>
-        /// Builtin method for loading assets based on the current Unity environment.
+        /// Builtin method for loading assets.
         /// </summary>
         /// <param name="assetType">Asset type.</param>
         /// <param name="assetPath">Path to asset.</param>
         /// <returns>The asset on success; <see langword="null"/> otherwise.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static LoadAssetAtPathHandler GetBuiltinLoadAssetAtPath()
+        private static object BuiltinLoadAssetAtPath(Type assetType, string assetPath)
         {
+            // Explicitly deal with byte arrays.
+            if (assetType == typeof(byte[]))
+            {
 #if UNITY_EDITOR
-            if (!Application.isPlaying)
-            {
-                return LoadAssetInEditor;
-            }
+                return File.ReadAllBytes(assetPath);
+#else
+                var textAsset = Resources.Load(assetPath, typeof(TextAsset)) as TextAsset;
+
+
+                return (textAsset != null)
+                    ? textAsset.bytes
+                    : null;
 #endif
-            return LoadAssetInRuntime;
+            }
+            else if (assetType == typeof(string))
+            {
+#if UNITY_EDITOR
+                return File.ReadAllText(assetPath);
+#else
+                var textAsset = Resources.Load(assetPath, typeof(TextAsset)) as TextAsset;
+
+
+                return (textAsset != null)
+                    ? textAsset.text
+                    : null;
+#endif
+            }
+
 
 #if UNITY_EDITOR
-
-            static object LoadAssetInEditor(Type assetType, string assetPath)
-            {
-                // Handle raw file types
-                if (assetType == typeof(byte[]))
-                {
-                    return File.ReadAllBytes(assetPath);
-                }
-
-                if (assetType == typeof(string))
-                {
-                    return File.ReadAllText(assetPath);
-                }
-
-                // Handle Unity assets
-                return AssetDatabase.LoadAssetAtPath(assetPath, assetType);
-            }
-
+            return AssetDatabase.LoadAssetAtPath(assetPath, assetType);
+#else
+            return Resources.Load(assetPath, assetType);
 #endif
-
-            static object LoadAssetInRuntime(Type assetType, string assetPath)
-            {
-                // Handle text assets
-                if (assetType == typeof(byte[]) || assetType == typeof(string))
-                {
-                    var textAsset = Resources.Load(assetPath, typeof(TextAsset)) as TextAsset;
-                    if (textAsset == null) return null;
-
-                    return assetType == typeof(byte[]) ? textAsset.bytes : textAsset.text;
-                }
-
-                // Handle Unity assets
-                return Resources.Load(assetPath, assetType);
-            }
         }
+
+
+        /// <summary>
+        /// Checks whether the parameter is an eye blink parameter.
+        /// </summary>
+        /// <param name="parameter">Parameter to check.</param>
+        /// <param name="groupName">Name of group to query for.</param>
+        /// <returns><see langword="true"/> if parameter is an eye blink parameter; <see langword="false"/> otherwise.</returns>
+        private bool IsParameterInGroup(CubismParameter parameter, string groupName)
+        {
+            // Return early if groups aren't available...
+            if (Groups == null || Groups.Length == 0)
+            {
+                return false;
+            }
+
+
+            for (var i = 0; i < Groups.Length; ++i)
+            {
+                if (Groups[i].Name != groupName)
+                {
+                    continue;
+                }
+
+                if(Groups[i].Ids != null)
+                {
+                    for (var j = 0; j < Groups[i].Ids.Length; ++j)
+                    {
+                        if (Groups[i].Ids[j] == parameter.name)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+
+            return false;
+        }
+
+
+        /// <summary>
+        /// Get body index from body array by Id.
+        /// </summary>
+        /// <param name="bodies">Target body array.</param>
+        /// <param name="id">Id for find.</param>
+        /// <returns>Array index if Id found; -1 otherwise.</returns>
+        private int GetBodyIndexById(CubismUserDataBody[] bodies, string id)
+        {
+            for (var i = 0; i < bodies.Length; ++i)
+            {
+                if (bodies[i].Id == id)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
 
         #endregion
 

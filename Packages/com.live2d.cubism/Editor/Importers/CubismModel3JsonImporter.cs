@@ -1,7 +1,16 @@
+/**
+ * Copyright(c) Live2D Inc. All rights reserved.
+ *
+ * Use of this source code is governed by the Live2D Open Software license
+ * that can be found at https://www.live2d.com/eula/live2d-open-software-license-agreement_en.html.
+ */
+
+
 ﻿using Live2D.Cubism.Core;
 using Live2D.Cubism.Editor;
 using Live2D.Cubism.Editor.Importers;
 using Live2D.Cubism.Framework.Json;
+using Live2D.Cubism.Rendering.Masking;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -78,6 +87,22 @@ namespace Packages.Live2D.Editor.Importers.New
         [SerializeField]
         private OverrideOption _overrideImportAsOriginalWorkflowOption;
 
+        /// <summary>
+        /// Should import as original workflow.
+        /// </summary>
+        private bool ShouldImportAsOriginalWorkflow
+        {
+            get
+            {
+                return _overrideImportAsOriginalWorkflowOption switch
+                {
+                    OverrideOption.Yes => true,
+                    OverrideOption.No => false,
+                    _ => CubismUnityEditorMenu.ShouldImportAsOriginalWorkflow
+                };
+            }
+        }
+
         public override void OnImportAsset(AssetImportContext ctx)
         {
             var model3Json = CubismModel3Json.LoadAtPath(ctx.assetPath);
@@ -95,7 +120,7 @@ namespace Packages.Live2D.Editor.Importers.New
             AssignDependencies(ctx, model3Json.FileReferences);
 
             // Instantiate model source and model.
-            var model = model3Json.ToModel(moc, CubismImporter.OnPickMaterial, CubismImporter.OnPickTexture, ShouldImportAsOriginalWorkflow);
+            var model = model3Json.ToModel(CubismImporter.OnPickDrawableMaterial, CubismImporter.OnPickTexture, CubismImporter.OnPickOffscreenMaterial, ShouldImportAsOriginalWorkflow);
 
             if (model == null)
             {
@@ -116,23 +141,6 @@ namespace Packages.Live2D.Editor.Importers.New
                 CubismImporter.SendModelTextureImportEvent(modelImportContext, model, texture);
             }
         }
-
-        /// <summary>
-        /// Should import as original workflow.
-        /// </summary>
-        private bool ShouldImportAsOriginalWorkflow
-        {
-            get
-            {
-                return _overrideImportAsOriginalWorkflowOption switch
-                {
-                    OverrideOption.Yes => true,
-                    OverrideOption.No => false,
-                    _ => CubismUnityEditorMenu.ShouldImportAsOriginalWorkflow
-                };
-            }
-        }
-
 
         private void AssignDependencies(AssetImportContext ctx, CubismModel3Json.SerializableFileReferences references)
         {

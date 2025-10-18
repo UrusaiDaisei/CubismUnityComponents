@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [5-r.5-beta.2] - 2025-10-14
+
+### Changed
+
+* Change to a method where `RenderTexture` for offscreen is pre-created in small numbers and reused.
+* Change the version of the development project to `6000.0.58f2`.
+
+### Fixed
+
+* Fix an issue where objects were not rendered when redisplayed.
+* Fix an issue where offscreen was not affected by `OverrideFlagForModelMultiplyColors` and `OverrideFlagForModelScreenColors`.
+* Fix an issue where collision detection remained active even when the collision detection Drawable was hidden.
+* Fix an issue where pressing the reset button in the `CubismParametersInspector` would revert to the state before the reset when running the scene.
+* Fix a bug that hit detection does not match the model’s visual appearance.
+* Fix a bug that the model may be partially clipped when rendered.
+* Fix the size of models using features introduced in `Cubism 5.3` differed from models created in prior to `Cubism 5.3`.
+* Fixed an issue where models for `Cubism 5.3` were not rendered correctly in environments where `UNITY_REVERSED_Z` is enabled.
+
+
+## [5-r.5-beta.1] - 2025-08-26
+
+### Added
+
+* Add support for Blend mode and Offscreen drawing.
+  * If the model uses blend mode or offscreen drawing, it will be rendered using a new drawing method that differs from `Cubism 5.2` and earlier.
+* Add high-precision mask method.
+  * This is only available with the new rendering method in `Cubism 5.3` and later, and masks in the new rendering method from `Cubism 5.3` onward will automatically use this method.
+
+### Changed
+
+* Change the version of the development project to `6000.0.55f1`.
+* Change `_isOverriddenDrawableScreenColors` and `_isOverriddenDrawableMultiplyColors` to `_isOverriddenDrawObjectScreenColors` and `_isOverriddenDrawObjectMultiplyColors`.
+  * The property names that use these backing fields have also been updated accordingly.
+  * Serialization of `_isOverriddenDrawableScreenColors` and `_isOverriddenDrawableMultiplyColors` is maintained by the `FormerlySerializedAs` attribute.
+
+### Removed
+
+* Remove `CubismCoreDll.GetDrawableRenderOrders` and `CubismUnmanagedDrawables.RenderOrders`.
+  * If you need to use these functions, please use `CubismModel.AllDrawObjectsRenderOrder` instead.
+    * See `CHANGELOG.md` in Core.
+* Remove Chrome OS from the tested environment.
+
+
 ## [5-r.4.1] - 2025-07-17
 
 ### Changed
@@ -474,6 +517,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * Fix issue where Priority value was not reset after playing motion with CubismMotionController.
 
 
+[5-r.5-beta.2]: https://github.com/Live2D/CubismUnityComponents/compare/5-r.5-beta.1...5-r.5-beta.2
+[5-r.5-beta.1]: https://github.com/Live2D/CubismUnityComponents/compare/5-r.4.1...5-r.5-beta.1
 [5-r.4.1]: https://github.com/Live2D/CubismUnityComponents/compare/5-r.4...5-r.4.1
 [5-r.4]: https://github.com/Live2D/CubismUnityComponents/compare/5-r.3...5-r.4
 [5-r.3]: https://github.com/Live2D/CubismUnityComponents/compare/5-r.2...5-r.3

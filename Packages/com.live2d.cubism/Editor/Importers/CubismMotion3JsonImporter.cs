@@ -113,7 +113,10 @@ namespace Packages.Live2D.Editor.Importers
         public override void OnImportAsset(AssetImportContext ctx)
         {
             var motionName = Path.GetFileName(ctx.assetPath);
-            var Motion3Json = CubismMotion3Json.LoadPath(ctx.assetPath);
+            
+            // Load motion3.json from file
+            var motion3JsonText = File.ReadAllText(ctx.assetPath);
+            var Motion3Json = CubismMotion3Json.LoadFrom(motion3JsonText);
             if (Motion3Json == null)
             {
                 ctx.LogImportError("unable to load motion3json file.");
@@ -142,21 +145,27 @@ namespace Packages.Live2D.Editor.Importers
                 return;
             }
 
-            AnimationClip clip = Motion3Json.ToAnimationClip(
-                importedGameObject,
-                new CubismMotion3Json.AnimationClipImportSettings
-                {
-                    shouldImportAsOriginalWorkflow = ShouldImportAsOriginalWorkflow,
-                    shouldClearAnimationCurves = ShouldClearAnimationCurves,
-                    OverrideLoop = _overrideLoopProperty switch
-                    {
-                        OverrideOption.Yes => true,
-                        OverrideOption.No => false,
-                        _ => null
-                    }
-                }
-            );
+            // Create animation clip with correct ToAnimationClip signature
+            var clip = new AnimationClip();
             clip.name = motionName;
+            
+            // Call ToAnimationClip with the existing clip and boolean parameters
+            Motion3Json.ToAnimationClip(
+                clip,
+                ShouldImportAsOriginalWorkflow,
+                ShouldClearAnimationCurves,
+                false,
+                null
+            );
+            
+            // Override loop settings if specified
+            if (_overrideLoopProperty != OverrideOption.SameAsSettings)
+            {
+                var settings = AnimationUtility.GetAnimationClipSettings(clip);
+                settings.loopTime = _overrideLoopProperty == OverrideOption.Yes;
+                AnimationUtility.SetAnimationClipSettings(clip, settings);
+            }
+            
             ctx.AddObjectToAsset("animation", clip);
             ctx.SetMainObject(clip);
             ctx.DependsOnSourceAsset(model3JsonPath);
