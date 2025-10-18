@@ -28,14 +28,13 @@ namespace Live2D.Cubism.Framework
         /// <summary>
         /// Model has cubism update controller component.
         /// </summary>
-        public bool HasUpdateController { get; set; }
+        public abstract bool HasUpdateController { get; set; }
 
         /// <summary>
         /// Called by cubism update controller. Updates controller.
         /// </summary>
         public abstract void OnLateUpdate();
 
-#if UNITY_EDITOR
         /// <summary>
         /// CubismModel cache.
         /// </summary>
@@ -74,21 +73,11 @@ namespace Live2D.Cubism.Framework
         }
 
         /// <summary>
-        /// Called by Unity.
+        /// Called by Unity. Script is loaded or a value is changed in the Inspector.
         /// </summary>
-        public void OnEnable()
+        private void OnValidate()
         {
-            // Get cubism update controller.
-            HasUpdateController = (GetComponent<CubismUpdateController>() != null);
+            hideFlags = HideFlags.DontSaveInBuild;
         }
-
-        /// <summary>
-        /// Called by Unity.
-        /// </summary>
-        private void LateUpdate()
-        {
-            // OnLateUpdate is not called because OriginalWorkflow is assumed.
-        }
-#endif
     }
 }

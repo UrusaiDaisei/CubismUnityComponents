@@ -142,7 +142,13 @@ namespace Live2D.Cubism.Core
         /// Current value.
         /// </summary>
         [SerializeField, HideInInspector]
-        public float Value;
+        internal float Value;
+
+        public float ParameterValue
+        {
+            get => Value;
+            set => Value = value;
+        }
 
         /// <summary>
         /// CubismModel cache.

@@ -460,7 +460,8 @@ namespace Live2D.Cubism.Framework.Json
                 return new AnimationEvent
                 {
                     time = data.Time,
-                    functionName = data.Value
+                    functionName = "OnAnimationEvent",
+                    stringParameter = data.Value
                 };
             }
 
@@ -528,7 +529,7 @@ namespace Live2D.Cubism.Framework.Json
             // カウント処理
             for (var curvePosition = 0; curvePosition < actualCurveListSize; ++curvePosition)
             {
-                 var curve = Curves[curvePosition];
+                var curve = Curves[curvePosition];
 
                 for (var segmentPosition = 0; segmentPosition < curve.Segments.Length;)
                 {
@@ -542,25 +543,24 @@ namespace Live2D.Cubism.Framework.Json
 
                     switch (segment)
                     {
-                    case 0:
-                        actualTotalPointCount += 1;
-                        segmentPosition += 3;
-                        break;
-                    case 1:
-                        actualTotalPointCount += 3;
-                        segmentPosition += 7;
-                        break;
-                    case 2:
-                        actualTotalPointCount += 1;
-                        segmentPosition += 3;
-                        break;
-                    case 3:
-                        actualTotalPointCount += 1;
-                        segmentPosition += 3;
-                        break;
-                    default:
-                        return false;
-                        break;
+                        case 0:
+                            actualTotalPointCount += 1;
+                            segmentPosition += 3;
+                            break;
+                        case 1:
+                            actualTotalPointCount += 3;
+                            segmentPosition += 7;
+                            break;
+                        case 2:
+                            actualTotalPointCount += 1;
+                            segmentPosition += 3;
+                            break;
+                        case 3:
+                            actualTotalPointCount += 1;
+                            segmentPosition += 3;
+                            break;
+                        default:
+                            return false;
                     }
 
                     ++actualTotalSegmentCount;

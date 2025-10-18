@@ -8,6 +8,7 @@
 
 using Live2D.Cubism.Framework;
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 #if UNITY_2019_3_OR_NEWER
 using UnityEngine.LowLevel;
@@ -23,9 +24,11 @@ namespace Live2D.Cubism.Core
     /// <summary>
     /// Runtime Cubism model.
     /// </summary>
-    [ExecuteInEditMode, CubismDontMoveOnReimport]
+    [ExecuteInEditMode, CubismDontMoveOnReimport, DefaultExecutionOrder(ExecutionOrder)]
     public sealed class CubismModel : MonoBehaviour
     {
+        const int ExecutionOrder = -1000;
+
         #region Delegates
 
         /// <summary>
@@ -436,7 +439,7 @@ namespace Live2D.Cubism.Core
             var playerLoopIndex = -1;
             for (var i = 0; i < playerLoopSystem.subSystemList.Length; i++)
             {
-                if (playerLoopSystem.subSystemList[i].type != typeof(PreLateUpdate))
+                if (playerLoopSystem.subSystemList[i].type != typeof(PostLateUpdate))
                 {
                     continue;
                 }
@@ -453,22 +456,19 @@ namespace Live2D.Cubism.Core
 
             // Get the "PreLateUpdate" system.
             var playerLoopSubSystem = playerLoopSystem.subSystemList[playerLoopIndex];
-            var subSystemList = playerLoopSubSystem.subSystemList;
 
-
-            // Register the model update function after "PreLateUpdate" system.
-            Array.Resize(ref subSystemList, subSystemList.Length + 1);
-            subSystemList[subSystemList.Length - 1] = myPlayerLoopSystem;
-
+            // Register the model update function before "PostLateUpdate" system.
+            var list = new List<PlayerLoopSystem>(playerLoopSubSystem.subSystemList);
+            list.Insert(0, myPlayerLoopSystem);
 
             // Restore the "PreLateUpdate" sytem.
-            playerLoopSubSystem.subSystemList = subSystemList;
+            playerLoopSubSystem.subSystemList = list.ToArray();
             playerLoopSystem.subSystemList[playerLoopIndex] = playerLoopSubSystem;
             PlayerLoop.SetPlayerLoop(playerLoopSystem);
         }
 #endif
 
-#region Unity Event Handling
+        #region Unity Event Handling
 
         /// <summary>
         /// Called by Unity. Triggers <see langword="this"/> to update.
@@ -649,6 +649,6 @@ namespace Live2D.Cubism.Core
             OnEnable();
         }
 
-#endregion
+        #endregion
     }
 }

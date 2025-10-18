@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Live2D.Cubism.Framework.Utils
 {
-    public static class SpanExtentions
+    internal static class SpanExtentions
     {
         public static void RightShift<T>(this Span<T> span, int index, int amount)
         {
