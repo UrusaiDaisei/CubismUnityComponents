@@ -46,7 +46,7 @@ AnimationClip:
     path: 
     classID: 114
     script: {fileID: 11500000, guid: f718ba9eaf9cd9a48923922e5df94070, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -76,7 +76,7 @@ AnimationClip:
     path: Parameters/PARAM_ANGLE_X
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -142,7 +142,7 @@ AnimationClip:
     path: Parameters/PARAM_ANGLE_Y
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -172,7 +172,7 @@ AnimationClip:
     path: Parameters/PARAM_ANGLE_Z
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -202,7 +202,7 @@ AnimationClip:
     path: Parameters/PARAM_BODY_ANGLE_X
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -277,7 +277,7 @@ AnimationClip:
     path: Parameters/PARAM_BODY_ANGLE_Y
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -307,7 +307,7 @@ AnimationClip:
     path: Parameters/PARAM_BODY_ANGLE_Z
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -337,7 +337,7 @@ AnimationClip:
     path: Parameters/PARAM_BODY
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -367,7 +367,7 @@ AnimationClip:
     path: Parameters/PARAM_BREATH
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -397,7 +397,7 @@ AnimationClip:
     path: Parameters/PARAM_HAIR_FRONT
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -427,7 +427,7 @@ AnimationClip:
     path: Parameters/PARAM_HAIR_SIDE
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -457,7 +457,7 @@ AnimationClip:
     path: Parameters/PARAM_HAIR_BACK
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -532,7 +532,7 @@ AnimationClip:
     path: Parameters/PARAM_HAIR_FLUFFY
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -607,7 +607,7 @@ AnimationClip:
     path: Parameters/PARAM_HAIR_FLUFFY_02
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -637,7 +637,7 @@ AnimationClip:
     path: Parameters/PARAM_SKIRT
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -667,7 +667,7 @@ AnimationClip:
     path: Parameters/PARAM_NECKTIE
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -697,7 +697,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_L_01
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -727,7 +727,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_L_02
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -802,7 +802,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_L_03
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -832,7 +832,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_L
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -862,7 +862,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_R_01
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -892,7 +892,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_R_02
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -967,7 +967,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_R_03
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -997,7 +997,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_R
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1027,7 +1027,7 @@ AnimationClip:
     path: Parameters/PARAM_HAND_SWITCH_L
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1057,7 +1057,7 @@ AnimationClip:
     path: Parameters/PARAM_HAND_SWITCH_R
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1087,7 +1087,7 @@ AnimationClip:
     path: Parameters/PARAM_HAND_L
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1117,7 +1117,7 @@ AnimationClip:
     path: Parameters/PARAM_HAND_R
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1192,7 +1192,7 @@ AnimationClip:
     path: Parameters/PARAM_PONPON
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   m_PPtrCurves: []
   m_SampleRate: 30
   m_WrapMode: 0
@@ -1513,7 +1513,7 @@ AnimationClip:
     path: 
     classID: 114
     script: {fileID: 11500000, guid: f718ba9eaf9cd9a48923922e5df94070, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1543,7 +1543,7 @@ AnimationClip:
     path: Parameters/PARAM_ANGLE_X
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1609,7 +1609,7 @@ AnimationClip:
     path: Parameters/PARAM_ANGLE_Y
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1639,7 +1639,7 @@ AnimationClip:
     path: Parameters/PARAM_ANGLE_Z
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1669,7 +1669,7 @@ AnimationClip:
     path: Parameters/PARAM_BODY_ANGLE_X
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1744,7 +1744,7 @@ AnimationClip:
     path: Parameters/PARAM_BODY_ANGLE_Y
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1774,7 +1774,7 @@ AnimationClip:
     path: Parameters/PARAM_BODY_ANGLE_Z
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1804,7 +1804,7 @@ AnimationClip:
     path: Parameters/PARAM_BODY
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1834,7 +1834,7 @@ AnimationClip:
     path: Parameters/PARAM_BREATH
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1864,7 +1864,7 @@ AnimationClip:
     path: Parameters/PARAM_HAIR_FRONT
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1894,7 +1894,7 @@ AnimationClip:
     path: Parameters/PARAM_HAIR_SIDE
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1924,7 +1924,7 @@ AnimationClip:
     path: Parameters/PARAM_HAIR_BACK
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -1999,7 +1999,7 @@ AnimationClip:
     path: Parameters/PARAM_HAIR_FLUFFY
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2074,7 +2074,7 @@ AnimationClip:
     path: Parameters/PARAM_HAIR_FLUFFY_02
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2104,7 +2104,7 @@ AnimationClip:
     path: Parameters/PARAM_SKIRT
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2134,7 +2134,7 @@ AnimationClip:
     path: Parameters/PARAM_NECKTIE
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2164,7 +2164,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_L_01
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2194,7 +2194,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_L_02
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2269,7 +2269,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_L_03
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2299,7 +2299,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_L
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2329,7 +2329,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_R_01
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2359,7 +2359,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_R_02
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2434,7 +2434,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_R_03
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2464,7 +2464,7 @@ AnimationClip:
     path: Parameters/PARAM_ARM_R
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2494,7 +2494,7 @@ AnimationClip:
     path: Parameters/PARAM_HAND_SWITCH_L
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2524,7 +2524,7 @@ AnimationClip:
     path: Parameters/PARAM_HAND_SWITCH_R
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2554,7 +2554,7 @@ AnimationClip:
     path: Parameters/PARAM_HAND_L
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2584,7 +2584,7 @@ AnimationClip:
     path: Parameters/PARAM_HAND_R
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   - serializedVersion: 2
     curve:
       serializedVersion: 2
@@ -2659,7 +2659,7 @@ AnimationClip:
     path: Parameters/PARAM_PONPON
     classID: 114
     script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
-    flags: 16
+    flags: 0
   m_EulerEditorCurves: []
   m_HasGenericRootTransform: 0
   m_HasMotionFloatCurves: 0

@@ -13,12 +13,7 @@ GameObject:
   - component: {fileID: 7830949463401400383}
   - component: {fileID: 7929394795424458536}
   - component: {fileID: 417204498402379697}
-  - component: {fileID: 6718890355120674246}
-  - component: {fileID: 5868322483300476964}
-  - component: {fileID: 6618156905004482107}
-  - component: {fileID: 3203264424933622951}
   - component: {fileID: 4703271267646896313}
-  - component: {fileID: 603126180609451008}
   m_Layer: 0
   m_Name: Clipping
   m_TagString: Untagged
@@ -55,7 +50,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9c172444d4638384fb2ba920744553ec, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Live2D.Cubism::Live2D.Cubism.Core.CubismModel
   _moc: {fileID: 11400000, guid: 0cd25900b6821d346824476d7529af29, type: 2}
   _isOverriddenParameterRepeat: 1
 --- !u!114 &7830949463401400383
@@ -93,7 +88,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f718ba9eaf9cd9a48923922e5df94070, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Live2D.Cubism::Live2D.Cubism.Rendering.CubismRenderController
   Opacity: 1
   _lastOpacity: 0
   _isOverriddenModelMultiplyColors: 0
@@ -115,58 +110,6 @@ MonoBehaviour:
   - {fileID: 6185745851915322232}
   _hasMask: 1
   _groupedSortingIndex: 0
---- !u!114 &6718890355120674246
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 154881630295515972}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 702f05e81266375468e2b47006338cf9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &5868322483300476964
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 154881630295515972}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e23066d7f6cfa354d91d0033239622a8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &6618156905004482107
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 154881630295515972}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7e1a8413ad039d7408cc5d00cde529a0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  defaultPoseIndex: 0
---- !u!114 &3203264424933622951
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 154881630295515972}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b893d4d32dd60bc4c9a2e447d31c6e88, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  ExpressionsList: {fileID: 0}
-  UseLegacyBlendCalculation: 0
-  CurrentExpressionIndex: -1
 --- !u!95 &4703271267646896313
 Animator:
   serializedVersion: 7
@@ -177,7 +120,7 @@ Animator:
   m_GameObject: {fileID: 154881630295515972}
   m_Enabled: 1
   m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: ddd76d46de4b2cf4596cd97dff8a3960, type: 2}
   m_CullingMode: 0
   m_UpdateMode: 0
   m_ApplyRootMotion: 0
@@ -189,19 +132,6 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
---- !u!114 &603126180609451008
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 154881630295515972}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0cd9e6647bfff7542acb0200ab74bdd1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  CubismFadeMotionList: {fileID: 0}
 --- !u!1 &1762681761935642830
 GameObject:
   m_ObjectHideFlags: 0
@@ -245,7 +175,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Live2D.Cubism::Live2D.Cubism.Core.CubismParameter
   _unmanagedIndex: 1
   Value: 0
   _isOverriddenUserParameterRepeat: 0
@@ -329,7 +259,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a6f4adbb68873874f8ea675c6a9adca3, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Live2D.Cubism::Live2D.Cubism.Core.CubismDrawable
   _unmanagedIndex: 0
   _screenColor: {r: 0, g: 0, b: 0, a: 1}
 --- !u!23 &9073448813080312448
@@ -352,6 +282,8 @@ MeshRenderer:
   m_RayTracingAccelStructBuildFlagsOverride: 0
   m_RayTracingAccelStructBuildFlags: 1
   m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -373,6 +305,7 @@ MeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
@@ -517,7 +450,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a6f4adbb68873874f8ea675c6a9adca3, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Live2D.Cubism::Live2D.Cubism.Core.CubismDrawable
   _unmanagedIndex: 2
   _screenColor: {r: 0, g: 0, b: 0, a: 1}
 --- !u!23 &2168625042298388213
@@ -540,6 +473,8 @@ MeshRenderer:
   m_RayTracingAccelStructBuildFlagsOverride: 0
   m_RayTracingAccelStructBuildFlags: 1
   m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -561,6 +496,7 @@ MeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
@@ -639,7 +575,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dafbb7ec1700e8147a48dbed2e4e543c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Live2D.Cubism::Live2D.Cubism.Core.CubismParameter
   _unmanagedIndex: 0
   Value: 0
   _isOverriddenUserParameterRepeat: 0
@@ -689,7 +625,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a6f4adbb68873874f8ea675c6a9adca3, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Live2D.Cubism::Live2D.Cubism.Core.CubismDrawable
   _unmanagedIndex: 1
   _screenColor: {r: 0, g: 0, b: 0, a: 1}
 --- !u!23 &6650187817984219938
@@ -712,6 +648,8 @@ MeshRenderer:
   m_RayTracingAccelStructBuildFlagsOverride: 0
   m_RayTracingAccelStructBuildFlags: 1
   m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -733,6 +671,7 @@ MeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0

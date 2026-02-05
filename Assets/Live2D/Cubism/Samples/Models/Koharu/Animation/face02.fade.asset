@@ -43,11 +43,11 @@ MonoBehaviour:
   - PARAM_MOUTH_FORM_02
   - PARAM_DROOL
   - PARAM_CHEEK
-  - PARTS_01_FACE_001
-  - PARTS_01_EYE_001
-  - PARTS_01_EYE_BALL_001
-  - PARTS_01_MOUTH_001
   - PARTS_01_NOSE_001
+  - PARTS_01_MOUTH_001
+  - PARTS_01_EYE_BALL_001
+  - PARTS_01_EYE_001
+  - PARTS_01_FACE_001
   ParameterCurves:
   - serializedVersion: 2
     m_Curve:
