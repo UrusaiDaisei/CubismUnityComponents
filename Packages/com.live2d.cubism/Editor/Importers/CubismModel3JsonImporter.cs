@@ -1,22 +1,16 @@
-﻿/**
+/**
  * Copyright(c) Live2D Inc. All rights reserved.
  *
  * Use of this source code is governed by the Live2D Open Software license
  * that can be found at https://www.live2d.com/eula/live2d-open-software-license-agreement_en.html.
  */
 
-
 using Live2D.Cubism.Core;
-using Live2D.Cubism.Framework;
-using Live2D.Cubism.Framework.Expression;
 using Live2D.Cubism.Framework.Json;
-using Live2D.Cubism.Framework.MotionFade;
-using Live2D.Cubism.Framework.Pose;
-using Live2D.Cubism.Rendering;
 using System;
 using System.IO;
-using System.Linq;
 using UnityEditor;
+using UnityEditor.AssetImporters;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -24,375 +18,191 @@ using Object = UnityEngine.Object;
 namespace Live2D.Cubism.Editor.Importers
 {
     /// <summary>
-    /// Handles importing of Cubism models.
+    /// ScriptedImporter for model3.json. Uses 5.3 ToModel(pickers) and exposes <see cref="IModelImportContext"/> and <see cref="OnDidImportModel"/>.
     /// </summary>
-    [Serializable]
-    public sealed class CubismModel3JsonImporter : CubismImporterBase
+    [ScriptedImporter(1, "model3.json", CubismImporterPriorities.Model3JsonImporter)]
+    public sealed class CubismModel3JsonImporter : ScriptedImporter
     {
         /// <summary>
-        /// <see cref="Model3Json"/> backing field.
+        /// Callback when a model is imported (ScriptedImporter path). Use this for custom post-import logic.
         /// </summary>
-        [NonSerialized] private CubismModel3Json _model3Json;
+        public static event Action<IModelImportContext> OnDidImportModel;
 
         /// <summary>
-        ///<see cref="CubismModel3Json"/> asset.
+        /// Path of the asset being imported. Valid only during the current OnImportAsset / model-import callbacks.
         /// </summary>
-        public CubismModel3Json Model3Json
-        {
-            get
-            {
-                if (_model3Json == null)
-                {
-                    _model3Json = CubismModel3Json.LoadAtPath(AssetPath);
-                }
-
-#if UNITY_2018_3_OR_NEWER
-                if (_modelPrefab == null)
-                {
-                    _modelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(AssetPath.Replace(".model3.json", ".prefab"));
-                    if(_modelPrefab != null)
-                    {
-                        _modelPrefabGuid = AssetGuid.GetGuid(_modelPrefab);
-                    }
-                }
-#endif
-
-                return _model3Json;
-            }
-        }
-
+        public string AssetPath => _currentAssetPath;
 
         /// <summary>
-        /// Guid of model prefab.
+        /// Model3Json for the asset being imported. Valid only during the current OnImportAsset / model-import callbacks.
         /// </summary>
-        [SerializeField] private string _modelPrefabGuid;
+        public CubismModel3Json Model3Json => _currentModel3Json;
 
-        /// <summary>
-        /// <see cref="ModelPrefab"/> backing field.
-        /// </summary>
-        [NonSerialized] private GameObject _modelPrefab;
-
-        /// <summary>
-        /// Prefab of model.
-        /// </summary>
-        private GameObject ModelPrefab
-        {
-            get
-            {
-                if (_modelPrefab == null)
-                {
-                    _modelPrefab = AssetGuid.LoadAsset<GameObject>(_modelPrefabGuid);
-                }
-
-
-                return _modelPrefab;
-            }
-            set
-            {
-                _modelPrefab = value;
-                _modelPrefabGuid = AssetGuid.GetGuid(value);
-            }
-        }
-
-
-        /// <summary>
-        /// Guid of moc.
-        /// </summary>
-        [SerializeField]
-        private string _mocAssetGuid;
-
-        /// <summary>
-        /// <see cref="MocAsset"/> backing field.
-        /// </summary>
         [NonSerialized]
-        private CubismMoc _mocAsset;
+        private string _currentAssetPath;
 
-        /// <summary>
-        /// Moc asset.
-        /// </summary>
-        private CubismMoc MocAsset
+        [NonSerialized]
+        private CubismModel3Json _currentModel3Json;
+
+        private sealed class ModelImportContext : IModelImportContext
         {
-            get
+            private readonly AssetImportContext _ctx;
+            private readonly string _modelName;
+
+            public string AssetPath => _ctx.assetPath;
+            public string ModelName => _modelName;
+            public CubismModel3Json Model3Json { get; }
+            public CubismModel Model { get; }
+
+            public ModelImportContext(AssetImportContext ctx, CubismModel3Json model3Json, CubismModel model)
             {
-                if (_mocAsset == null)
-                {
-                    _mocAsset = AssetGuid.LoadAsset<CubismMoc>(_mocAssetGuid);
-                }
-
-
-                return _mocAsset;
+                _ctx = ctx;
+                Model3Json = model3Json;
+                Model = model;
+                _modelName = Path.GetFileNameWithoutExtension(AssetPath);
+                var dot = _modelName.IndexOf('.');
+                if (dot >= 0)
+                    _modelName = _modelName.Substring(0, dot);
             }
-            set
+
+            public void AddSubObject(Object subObject)
             {
-                _mocAsset = value;
-                _mocAssetGuid = AssetGuid.GetGuid(value);
+                if (subObject != null)
+                    _ctx.AddObjectToAsset(subObject.name ?? "sub", subObject);
+            }
+
+            public void DependsOnSourceAsset(string path)
+            {
+                if (!string.IsNullOrEmpty(path))
+                    _ctx.DependsOnSourceAsset(path);
+            }
+
+            public void DependsOnArtifact(string path)
+            {
+                if (!string.IsNullOrEmpty(path))
+                    _ctx.DependsOnArtifact(path);
             }
         }
 
+        private enum OverrideOption
+        {
+            SameAsSettings,
+            Yes,
+            No
+        }
 
-        /// <summary>
-        /// Should import as original workflow.
-        /// </summary>
+        [SerializeField]
+        private OverrideOption _overrideImportAsOriginalWorkflowOption = OverrideOption.SameAsSettings;
+
         private bool ShouldImportAsOriginalWorkflow
         {
             get
             {
-                return CubismUnityEditorMenu.ShouldImportAsOriginalWorkflow;
+                switch (_overrideImportAsOriginalWorkflowOption)
+                {
+                    case OverrideOption.Yes: return true;
+                    case OverrideOption.No: return false;
+                    default: return CubismUnityEditorMenu.ShouldImportAsOriginalWorkflow;
+                }
             }
         }
 
-        #region Unity Event Handling
-
-        /// <summary>
-        /// Registers importer.
-        /// </summary>
-        [InitializeOnLoadMethod]
-        // ReSharper disable once UnusedMember.Local
-        private static void RegisterImporter()
+        public override void OnImportAsset(AssetImportContext ctx)
         {
-            CubismImporter.RegisterImporter<CubismModel3JsonImporter>(".model3.json");
-        }
-
-        #endregion
-
-        #region CubismImporterBase
-
-        /// <summary>
-        /// Imports the corresponding asset.
-        /// </summary>
-        public override void Import()
-        {
-            var isImporterDirty = false;
-
-
-            // Instantiate model source and model.
-            var model = Model3Json.ToModel(CubismImporter.OnPickDrawableMaterial, CubismImporter.OnPickTexture, CubismImporter.OnPickOffscreenMaterial, ShouldImportAsOriginalWorkflow);
-
-            if (model == null)
+            _currentAssetPath = ctx.assetPath;
+            _currentModel3Json = CubismModel3Json.LoadAtPath(ctx.assetPath);
+            if (_currentModel3Json == null)
             {
+                ctx.LogImportError("Unable to load model3.json file.");
                 return;
             }
 
-            var assetPath = AssetPath.Replace(".model3.json", "");
-            var modelName = Path.GetFileName(assetPath).Replace(".model3.json", "");
+            var model3Json = _currentModel3Json;
+            AssignDependencies(ctx, model3Json.FileReferences);
+
+            var model = model3Json.ToModel(
+                CubismImporter.OnPickDrawableMaterial,
+                CubismImporter.OnPickTexture,
+                CubismImporter.OnPickOffscreenMaterial,
+                ShouldImportAsOriginalWorkflow);
+
+            if (model == null)
+            {
+                ctx.LogImportError("Unable to import model data.");
+                return;
+            }
 
             var moc = model.Moc;
-            moc.name = modelName;
-
-            // Create moc asset.
-            if (MocAsset == null)
+            if (moc != null)
             {
-                AssetDatabase.CreateAsset(moc, $"{assetPath}.asset");
-
-
-                MocAsset = moc;
-
-
-                isImporterDirty = true;
+                moc.name = Path.GetFileNameWithoutExtension(model3Json.FileReferences.Moc);
+                ctx.AddObjectToAsset("moc", moc);
             }
 
+            ctx.AddObjectToAsset("model", model.gameObject);
+            ctx.SetMainObject(model.gameObject);
 
-            // Create model prefab.
-            if (ModelPrefab == null)
+            var importContext = new ModelImportContext(ctx, model3Json, model);
+            OnDidImportModel?.Invoke(importContext);
+            CubismImporter.SendModelImportEvent(this, model);
+
+            foreach (var texture in model3Json.Textures ?? Array.Empty<Texture2D>())
             {
-                // Trigger event.
-                CubismImporter.SendModelImportEvent(this, model);
-
-
-                foreach (var texture in Model3Json.Textures)
-                {
-                    CubismImporter.SendModelTextureImportEvent(this, model, texture);
-                }
-
-                // Create prefab and trigger saving of changes.
-#if UNITY_2018_3_OR_NEWER
-                ModelPrefab = PrefabUtility.SaveAsPrefabAsset(model.gameObject, $"{assetPath}.prefab");
-#else
-                ModelPrefab = PrefabUtility.CreatePrefab($"{assetPath}.prefab", model.gameObject);
-#endif
-
-                isImporterDirty = true;
-            }
-
-
-            // Update model prefab.
-            else
-            {
-                var cubismModel = ModelPrefab.FindCubismModel();
-                if (cubismModel.Moc == null)
-                {
-                    CubismModel.ResetMocReference(cubismModel,
-                        AssetDatabase.LoadAssetAtPath<CubismMoc>(
-                            $"{assetPath}.asset"));
-                }
-
-
-                // Copy all user data over from previous model.
-                var source = Object.Instantiate(ModelPrefab).FindCubismModel();
-
-
-                CopyUserData(source, model);
-
-                Object.DestroyImmediate(source.gameObject, true);
-
-
-                // Trigger events.
-                CubismImporter.SendModelImportEvent(this, model);
-
-
-                foreach (var texture in Model3Json.Textures)
-                {
-                    CubismImporter.SendModelTextureImportEvent(this, model, texture);
-                }
-
-                var renderController = model.gameObject.GetComponent<CubismRenderController>();
-
-                if (renderController)
-                {
-                    // HACK: Re-assign textures to avoid lost references due to Unity prefab optimization.
-                    foreach (var cubismRenderer in renderController.DrawableRenderers)
-                    {
-                        // Reset texture references.
-                        cubismRenderer.MainTexture =
-                            CubismBuiltinPickers.TexturePicker(Model3Json, cubismRenderer.Drawable);
-                    }
-                }
-
-                // Reset moc reference.
-                CubismModel.ResetMocReference(model, MocAsset);
-
-                // Keep layer value.
-                model.gameObject.layer = ModelPrefab.layer;
-
-                // Replace prefab.
-#if UNITY_2018_3_OR_NEWER
-                ModelPrefab = PrefabUtility.SaveAsPrefabAsset(model.gameObject, $"{assetPath}.prefab");
-#else
-                ModelPrefab = PrefabUtility.ReplacePrefab(model.gameObject, ModelPrefab, ReplacePrefabOptions.ConnectToPrefab);
-#endif
-
-                // Log event.
-                CubismImporter.LogReimport(AssetPath, AssetDatabase.GUIDToAssetPath(_modelPrefabGuid));
-            }
-
-
-            // Clean up.
-            Object.DestroyImmediate(model.gameObject, true);
-
-
-            // Update moc asset.
-            if (MocAsset != null)
-            {
-                EditorUtility.CopySerialized(moc, MocAsset);
-
-
-                // Revive by force to make instance using the new Moc.
-                CubismMoc.ResetUnmanagedMoc(MocAsset);
-
-
-                EditorUtility.SetDirty(MocAsset);
-            }
-
-            // Save state and assets.
-            if (isImporterDirty)
-            {
-                Save();
-            }
-            else
-            {
-                AssetDatabase.SaveAssets();
+                if (texture != null)
+                    CubismImporter.SendModelTextureImportEvent(importContext, model, texture);
             }
         }
 
-        #endregion
-
-        private static void CopyUserData(CubismModel source, CubismModel destination, bool copyComponentsOnly = false)
+        private static void AssignDependencies(AssetImportContext ctx, CubismModel3Json.SerializableFileReferences refs)
         {
-            // Give parameters, parts, and drawables special treatment.
-            CopyUserData(source.Parameters, destination.Parameters, copyComponentsOnly);
-            CopyUserData(source.Parts, destination.Parts, copyComponentsOnly);
-            CopyUserData(source.Drawables, destination.Drawables, copyComponentsOnly);
-
-
-            // Copy components.
-            foreach (var sourceComponent in source.GetComponents(typeof(Component)))
+            var baseDir = Path.GetDirectoryName(ctx.assetPath);
+            string FullPath(string path)
             {
-                // Skip non-movable components.
-                if (!sourceComponent.MoveOnCubismReimport(copyComponentsOnly))
-                {
-                    continue;
-                }
-
-                // skip copy original workflow component.
-                if(sourceComponent.GetType() == typeof(CubismUpdateController)
-                || sourceComponent.GetType() == typeof(CubismFadeController)
-                || sourceComponent.GetType() == typeof(CubismExpressionController)
-                || sourceComponent.GetType() == typeof(CubismPoseController)
-                || sourceComponent.GetType() == typeof(CubismParameterStore))
-                {
-                    continue;
-                }
-
-                // Copy component.
-                var destinationComponent = destination.GetOrAddComponent(sourceComponent.GetType());
-
-
-                EditorUtility.CopySerialized(sourceComponent, destinationComponent);
+                if (string.IsNullOrWhiteSpace(path)) return null;
+                return Path.Combine(baseDir, path);
             }
-        }
 
+            if (!string.IsNullOrWhiteSpace(refs.Moc))
+                ctx.DependsOnSourceAsset(FullPath(refs.Moc));
 
-        private static void CopyUserData<T>(T[] source, T[] destination, bool copyComponentsOnly) where T : MonoBehaviour
-        {
-            foreach (var destinationT in destination)
+            if (refs.Textures != null)
             {
-                var sourceT = source.FirstOrDefault(p => p.name == destinationT.name);
-
-
-                // Skip removed parameters.
-                if (sourceT == null)
+                foreach (var t in refs.Textures)
                 {
-                    continue;
+                    var p = FullPath(t);
+                    if (p != null) ctx.DependsOnSourceAsset(p);
                 }
+            }
 
+            if (!string.IsNullOrWhiteSpace(refs.DisplayInfo))
+                ctx.DependsOnSourceAsset(FullPath(refs.DisplayInfo));
+            if (!string.IsNullOrWhiteSpace(refs.Physics))
+                ctx.DependsOnSourceAsset(FullPath(refs.Physics));
+            if (!string.IsNullOrWhiteSpace(refs.UserData))
+                ctx.DependsOnSourceAsset(FullPath(refs.UserData));
+            if (!string.IsNullOrWhiteSpace(refs.Pose))
+                ctx.DependsOnSourceAsset(FullPath(refs.Pose));
 
-                // Copy any children.
-                foreach (var child in sourceT.transform
-                    .GetComponentsInChildren<Transform>()
-                    .Where(t => t != sourceT.transform)
-                    .Select(t => t.gameObject))
+            if (refs.Expressions != null)
+            {
+                foreach (var e in refs.Expressions)
                 {
-                    Object.Instantiate(child, destinationT.transform);
+                    if (string.IsNullOrWhiteSpace(e.File)) continue;
+                    var p = FullPath(e.File);
+                    if (p != null) ctx.DependsOnSourceAsset(p);
                 }
+            }
 
-
-                // Copy components.
-                foreach (var sourceComponent in sourceT.GetComponents(typeof(Component)))
+            if (refs.Motions.Motions != null)
+            {
+                foreach (var group in refs.Motions.Motions)
                 {
-                    // Skip non-movable components.
-                    if (!sourceComponent.MoveOnCubismReimport(copyComponentsOnly))
+                    if (group == null) continue;
+                    foreach (var m in group)
                     {
-                        continue;
-                    }
-
-
-                    // Copy component.
-                    var destinationComponent = destinationT.GetOrAddComponent(sourceComponent.GetType());
-                    if (destinationComponent is CubismDisplayInfoParameterName cdiParameterName && !string.IsNullOrEmpty(cdiParameterName.Name))
-                    {
-                        var name = cdiParameterName.Name;
-                        EditorUtility.CopySerialized(sourceComponent, destinationComponent);
-                        cdiParameterName.Name = name;
-                    }
-                    else if (destinationComponent is CubismDisplayInfoPartName cdiPartName && !string.IsNullOrEmpty(cdiPartName.Name))
-                    {
-                        var name = cdiPartName.Name;
-                        EditorUtility.CopySerialized(sourceComponent, destinationComponent);
-                        cdiPartName.Name = name;
-                    }
-                    else
-                    {
-                        EditorUtility.CopySerialized(sourceComponent, destinationComponent);
+                        if (string.IsNullOrWhiteSpace(m.File)) continue;
+                        var p = FullPath(m.File);
+                        if (p != null) ctx.DependsOnSourceAsset(p);
                     }
                 }
             }

@@ -132,7 +132,7 @@ Work in small, verifiable steps. After each step, build in Unity and run a quick
 - **Ported:** Only **CubismParameter** customizations: `[DisallowMultipleComponent]`, private method renamed `Reset` → `ResetParameter`, and public `ParameterValue` property (alias for `Value`). No other Core files changed.
 - **Left as 5.3:** ArrayExtensionMethods (5.3 keeps Offscreens Revive), CubismDrawable, CubismMoc, CubismModel, CubismPart, and all Unmanaged types — differences are SDK/API or structural; keep packaged-version Core.
 
-### Phase A: Import pipeline (ScriptedImporter)
+### Phase A: Import pipeline (ScriptedImporter) — done
 
 1. **Importer priorities and entry point**  
    - Ensure `CubismImporterPriorities.cs` exists in `Packages/com.live2d.cubism/Editor/Importers/` and is used by `CubismModel3JsonImporter` (and optionally `CubismMocImporter`).  
@@ -153,7 +153,8 @@ Work in small, verifiable steps. After each step, build in Unity and run a quick
    - Keep the new package’s built-in resource/material generation as-is unless we have a specific tweak.
 
 5. **Samples**  
-   - Update sample script (e.g. `ImportCustomization.cs`) to use `CubismModel3JsonImporter.OnDidImportModel` and `IModelImportContext` with correct namespace and types.
+   - Update sample script (e.g. `ImportCustomization.cs`) to use `CubismModel3JsonImporter.OnDidImportModel` and `IModelImportContext` with correct namespace and types.  
+   - Implemented: legacy event still fired; sample comment added for IModelImportContext.
 
 ### Phase B: Editor-only additions (no Core/Runtime API)
 

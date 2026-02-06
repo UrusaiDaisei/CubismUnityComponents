@@ -17,6 +17,27 @@ using UnityEngine;
 namespace Live2D.Cubism.Editor.Importers
 {
     /// <summary>
+    /// Context passed when a model is imported via the ScriptedImporter (model3.json).
+    /// </summary>
+    public interface IModelImportContext
+    {
+        /// <summary>Path of the model3.json asset.</summary>
+        string AssetPath { get; }
+        /// <summary>Model name derived from the asset path.</summary>
+        string ModelName { get; }
+        /// <summary>Loaded Model3Json data.</summary>
+        CubismModel3Json Model3Json { get; }
+        /// <summary>Imported Cubism model instance.</summary>
+        CubismModel Model { get; }
+        /// <summary>Add a sub-asset to the imported asset.</summary>
+        void AddSubObject(UnityEngine.Object subObject);
+        /// <summary>Register dependency on another source asset (e.g. reimport when that file changes).</summary>
+        void DependsOnSourceAsset(string path);
+        /// <summary>Register dependency on another asset's imported artifact.</summary>
+        void DependsOnArtifact(string path);
+    }
+
+    /// <summary>
     /// Helper functionality for <see cref="ICubismImporter"/>s.
     /// </summary>
     public static class CubismImporter
@@ -35,6 +56,11 @@ namespace Live2D.Cubism.Editor.Importers
         /// Callback for textures used by Cubism model on <see cref="CubismModel"/> import.
         /// </summary>
         public delegate void TextureImportHandler(CubismModel3JsonImporter importer, CubismModel model, Texture2D texture);
+
+        /// <summary>
+        /// Callback for textures when using ScriptedImporter ( <see cref="IModelImportContext"/> ).
+        /// </summary>
+        public delegate void TextureImportHandlerContext(IModelImportContext context, CubismModel model, Texture2D texture);
 
 
         /// <summary>
@@ -60,6 +86,11 @@ namespace Live2D.Cubism.Editor.Importers
         /// Set <see langword="null"/> in case you don't want Cubism model texture importing to be customized from script.
         /// </remarks>
         public static TextureImportHandler OnDidImportTexture = BuiltinTextureImportHandler;
+
+        /// <summary>
+        /// Texture import handler when using ScriptedImporter (model3.json). Used by <see cref="CubismModel3JsonImporter"/>.
+        /// </summary>
+        public static TextureImportHandlerContext OnDidImportTextureContext = BuiltinTextureImportHandlerContext;
 
 
         /// <summary>
@@ -163,11 +194,8 @@ namespace Live2D.Cubism.Editor.Importers
         }
 
         /// <summary>
-        /// Safely triggers <see cref="OnDidImportModelTexture"/>
+        /// Safely triggers texture import callback (legacy importer path).
         /// </summary>
-        /// <param name="importer">Importer.</param>
-        /// <param name="model">Imported model.</param>
-        /// <param name="texture">Imported texture.</param>
         internal static void SendModelTextureImportEvent(CubismModel3JsonImporter importer, CubismModel model, Texture2D texture)
         {
             if (OnDidImportTexture == null)
@@ -177,6 +205,19 @@ namespace Live2D.Cubism.Editor.Importers
 
 
             OnDidImportTexture(importer, model, texture);
+        }
+
+        /// <summary>
+        /// Safely triggers texture import callback when using <see cref="IModelImportContext"/> (ScriptedImporter path).
+        /// </summary>
+        internal static void SendModelTextureImportEvent(IModelImportContext context, CubismModel model, Texture2D texture)
+        {
+            if (OnDidImportTextureContext == null)
+            {
+                return;
+            }
+
+            OnDidImportTextureContext(context, model, texture);
         }
 
         /// <summary>
@@ -246,6 +287,36 @@ namespace Live2D.Cubism.Editor.Importers
             textureImporter.textureType = TextureImporterType.Default;
             textureImporter.textureCompression = TextureImporterCompression.Uncompressed;
 
+
+            EditorUtility.SetDirty(texture);
+            textureImporter.SaveAndReimport();
+        }
+
+        /// <summary>
+        /// Default texture import handler when using <see cref="IModelImportContext"/> (ScriptedImporter).
+        /// </summary>
+        private static void BuiltinTextureImportHandlerContext(IModelImportContext context, CubismModel model, Texture2D texture)
+        {
+            var textureImporter = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(texture)) as TextureImporter;
+
+            if (!textureImporter)
+            {
+                Debug.LogError("[Texture Importer] Could not get TextureImporter for texture used by Cubism model.");
+                return;
+            }
+
+            if (!textureImporter.mipmapEnabled
+                && textureImporter.alphaIsTransparency
+                && textureImporter.textureType == TextureImporterType.Default
+                && textureImporter.textureCompression == TextureImporterCompression.Uncompressed)
+            {
+                return;
+            }
+
+            textureImporter.mipmapEnabled = false;
+            textureImporter.alphaIsTransparency = true;
+            textureImporter.textureType = TextureImporterType.Default;
+            textureImporter.textureCompression = TextureImporterCompression.Uncompressed;
 
             EditorUtility.SetDirty(texture);
             textureImporter.SaveAndReimport();

@@ -1,276 +1,199 @@
-﻿/**
+/**
  * Copyright(c) Live2D Inc. All rights reserved.
  *
  * Use of this source code is governed by the Live2D Open Software license
  * that can be found at https://www.live2d.com/eula/live2d-open-software-license-agreement_en.html.
  */
 
-
+using Live2D.Cubism.Core;
+using Live2D.Cubism.Editor;
 using Live2D.Cubism.Framework.Json;
 using System;
 using System.IO;
-using System.Threading.Tasks;
+using System.Linq;
 using UnityEditor;
+using UnityEditor.AssetImporters;
 using UnityEngine;
-
+using Object = UnityEngine.Object;
 
 namespace Live2D.Cubism.Editor.Importers
 {
     /// <summary>
-    /// Handles importing of Cubism motions.
+    /// Context passed when a motion is imported via the ScriptedImporter (motion3.json).
     /// </summary>
-    [Serializable]
-    public sealed class CubismMotion3JsonImporter : CubismImporterBase
+    public interface IMotionImportContext
+    {
+        string AssetPath { get; }
+        string MotionName { get; }
+        CubismMotion3Json Motion3Json { get; }
+        CubismModel3Json Model3Json { get; }
+        AnimationClip AnimationClip { get; }
+        bool ShouldImportAsOriginalWorkflow { get; }
+        bool ShouldClearAnimationCurves { get; }
+        void AddSubObject(Object subObject);
+    }
+
+    /// <summary>
+    /// ScriptedImporter for motion3.json. Exposes <see cref="IMotionImportContext"/> and <see cref="OnDidImportMotion"/>.
+    /// </summary>
+    [ScriptedImporter(1, "motion3.json", CubismImporterPriorities.Motion3JsonImporter)]
+    public sealed class CubismMotion3JsonImporter : ScriptedImporter
     {
         /// <summary>
-        /// <see cref="Motion3Json"/> backing field.
+        /// Callback when a motion is imported. Use for custom post-import logic.
         /// </summary>
+        public static event Action<IMotionImportContext> OnDidImportMotion;
+
+        /// <summary>
+        /// Path of the asset being imported. Valid only during the current OnImportAsset / motion-import callbacks.
+        /// </summary>
+        public string AssetPath => _currentAssetPath;
+
+        /// <summary>
+        /// Motion3Json for the asset being imported. Valid only during the current OnImportAsset / motion-import callbacks.
+        /// </summary>
+        public CubismMotion3Json Motion3Json => _currentMotion3Json;
+
         [NonSerialized]
-        private CubismMotion3Json _motion3Json;
+        private string _currentAssetPath;
 
-        /// <summary>
-        ///<see cref="CubismMotion3Json"/> asset.
-        /// </summary>
-        public CubismMotion3Json Motion3Json
+        [NonSerialized]
+        private CubismMotion3Json _currentMotion3Json;
+
+        private sealed class MotionImportContext : IMotionImportContext
         {
-            get
+            private readonly AssetImportContext _ctx;
+            private readonly string _motionName;
+
+            public string AssetPath => _ctx.assetPath;
+            public string MotionName => _motionName;
+            public CubismMotion3Json Motion3Json { get; }
+            public CubismModel3Json Model3Json { get; }
+            public AnimationClip AnimationClip { get; }
+            public bool ShouldImportAsOriginalWorkflow { get; }
+            public bool ShouldClearAnimationCurves { get; }
+
+            public MotionImportContext(
+                AssetImportContext ctx,
+                CubismMotion3Json motion3Json,
+                AnimationClip animationClip,
+                CubismModel3Json model3Json,
+                bool shouldImportAsOriginalWorkflow,
+                bool shouldClearAnimationCurves)
             {
-                if (_motion3Json == null)
-                {
-                    _motion3Json = CubismMotion3Json.LoadFrom(AssetDatabase.LoadAssetAtPath<TextAsset>((AssetPath)));
-                }
+                _ctx = ctx;
+                Motion3Json = motion3Json;
+                AnimationClip = animationClip;
+                Model3Json = model3Json;
+                ShouldImportAsOriginalWorkflow = shouldImportAsOriginalWorkflow;
+                ShouldClearAnimationCurves = shouldClearAnimationCurves;
+                _motionName = Path.GetFileName(ctx.assetPath).Replace(".motion3.json", "");
+            }
 
-
-                return _motion3Json;
+            public void AddSubObject(Object subObject)
+            {
+                if (subObject != null)
+                    _ctx.AddObjectToAsset(subObject.name ?? "sub", subObject);
             }
         }
 
-
-        /// <summary>
-        /// GUID of generated clip.
-        /// </summary>
-        [SerializeField] private string _animationClipGuid;
-
-        /// <summary>
-        /// <see cref="AnimationClip"/> backing field.
-        /// </summary>
-        [NonSerialized] private AnimationClip _animationClip;
-
-        /// <summary>
-        /// Gets the moc3 importer.
-        /// </summary>
-        private AnimationClip AnimationClip
+        private enum OverrideOption
         {
-            get
-            {
-                if (_animationClip != null)
-                {
-                    return _animationClip;
-                }
-
-                AnimationClip clip;
-                var directoryName = Path.GetDirectoryName(AssetPath);
-                var motionName = Path.GetFileName(AssetPath.Replace(".motion3.json", ".anim"));
-                var motionPath = $"{directoryName}/{motionName}";
-                motionPath = motionPath.Replace("\\", "/");
-
-                var assetList = CubismCreatedAssetList.GetInstance();
-                var assetListIndex = assetList.AssetPaths.Contains(motionPath)
-                    ? assetList.AssetPaths.IndexOf(motionPath)
-                    : -1;
-
-                // When the AnimationClip has already been registered in CubismCreatedAssetList.Assets.
-                if (assetListIndex >= 0)
-                {
-                    clip = (AnimationClip)assetList.Assets[assetListIndex];
-                    _animationClip = clip;
-                    _animationClipGuid = AssetGuid.GetGuid(_animationClip);
-
-                    return _animationClip;
-                }
-
-                clip = AssetGuid.LoadAsset<AnimationClip>(_animationClipGuid);
-                _animationClip = clip;
-                _animationClipGuid = AssetGuid.GetGuid(_animationClip);
-
-                // When the AnimationClip can be retrieved from a GUID.
-                if (_animationClip != null)
-                {
-                    return _animationClip;
-                }
-
-                clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(AssetPath.Replace(".motion3.json", ".anim"));
-                _animationClip = clip;
-                _animationClipGuid = AssetGuid.GetGuid(clip);
-
-                return _animationClip;
-            }
-            set
-            {
-                _animationClip = value;
-                _animationClipGuid = AssetGuid.GetGuid(value);
-            }
+            SameAsSettings,
+            Yes,
+            No
         }
 
-        /// <summary>
-        /// Should import as original workflow.
-        /// </summary>
-        private bool ShouldImportAsOriginalWorkflow
+        [SerializeField]
+        private OverrideOption _overrideImportAsOriginalWorkflowOption = OverrideOption.SameAsSettings;
+
+        [SerializeField]
+        private OverrideOption _overrideClearAnimationCurvesOption = OverrideOption.SameAsSettings;
+
+        private bool ShouldImportAsOriginalWorkflow =>
+            _overrideImportAsOriginalWorkflowOption == OverrideOption.Yes
+                ? true
+                : _overrideImportAsOriginalWorkflowOption == OverrideOption.No
+                    ? false
+                    : CubismUnityEditorMenu.ShouldImportAsOriginalWorkflow;
+
+        private bool ShouldClearAnimationCurves =>
+            _overrideClearAnimationCurvesOption == OverrideOption.Yes
+                ? true
+                : _overrideClearAnimationCurvesOption == OverrideOption.No
+                    ? false
+                    : CubismUnityEditorMenu.ShouldClearAnimationCurves;
+
+        public override void OnImportAsset(AssetImportContext ctx)
         {
-            get
+            _currentAssetPath = ctx.assetPath;
+            var fullPath = Path.GetFullPath(Path.Combine(Application.dataPath, "..", ctx.assetPath));
+            var jsonText = File.ReadAllText(fullPath);
+            _currentMotion3Json = CubismMotion3Json.LoadFrom(jsonText);
+            if (_currentMotion3Json == null)
             {
-                return CubismUnityEditorMenu.ShouldImportAsOriginalWorkflow;
-            }
-        }
-
-        /// <summary>
-        /// Should clear animation clip curves.
-        /// </summary>
-        private bool ShouldClearAnimationCurves
-        {
-            get
-            {
-                return CubismUnityEditorMenu.ShouldClearAnimationCurves;
-            }
-        }
-
-        #region Unity Event Handling
-
-        /// <summary>
-        /// Registers importer.
-        /// </summary>
-        [InitializeOnLoadMethod]
-        // ReSharper disable once UnusedMember.Local
-        private static void RegisterImporter()
-        {
-            CubismImporter.RegisterImporter<CubismMotion3JsonImporter>(".motion3.json");
-        }
-
-        #endregion
-
-        #region CubismImporterBase
-
-        /// <summary>
-        /// Imports the corresponding asset.
-        /// </summary>
-        public override void Import()
-        {
-            if (Motion3Json == null)
-            {
+                ctx.LogImportError("Unable to load motion3.json file.");
                 return;
             }
 
-            var isImporterDirty = false;
-
-            // Add reference of motion to list.
-            var directoryName = Path.GetDirectoryName(AssetPath);
-            var motionName = Path.GetFileName(AssetPath.Replace(".motion3.json", ""));
-            var motionPath = $"{directoryName}/{motionName}.anim";
-
-            var assetList = CubismCreatedAssetList.GetInstance();
-            var assetListIndex = assetList.AssetPaths.Contains(motionPath)
-                ? assetList.AssetPaths.IndexOf(motionPath)
-                : -1;
-
-            AnimationClip clip;
-            if (assetListIndex < 0)
+            var motion3Json = _currentMotion3Json;
+            var parentDirectory = Path.GetDirectoryName(ctx.assetPath);
+            var model3JsonPath = FindModel3JsonFile(parentDirectory);
+            if (model3JsonPath == null)
             {
-                clip = (ShouldImportAsOriginalWorkflow)
-                    ? AssetDatabase.LoadAssetAtPath<AnimationClip>(motionPath)
-                    : null;
-
-                // Convert motion.
-                var animationClip = (clip == null)
-                    ? Motion3Json.ToAnimationClip(ShouldImportAsOriginalWorkflow, ShouldClearAnimationCurves)
-                    : Motion3Json.ToAnimationClip(clip, ShouldImportAsOriginalWorkflow, ShouldClearAnimationCurves);
-
-                if (animationClip == null)
-                {
-                    return;
-                }
-
-                animationClip.name = motionName;
-
-                // Create animation clip.
-                if (AnimationClip == null)
-                {
-                    AssetDatabase.CreateAsset(animationClip, AssetPath.Replace(".motion3.json", ".anim"));
-                    AnimationClip = animationClip;
-                }
-
-                isImporterDirty = true;
-                clip = AnimationClip;
-
-                assetList.Assets.Add(AnimationClip);
-                assetList.AssetPaths.Add(motionPath);
-                assetList.IsImporterDirties.Add(false);
-            }
-            else
-            {
-                // Update animation clip.
-                clip = (AnimationClip)assetList.Assets[assetListIndex];
-
-                // Convert motion.
-                var animationClip = (clip == null)
-                    ? Motion3Json.ToAnimationClip(ShouldImportAsOriginalWorkflow, ShouldClearAnimationCurves)
-                    : Motion3Json.ToAnimationClip(clip, ShouldImportAsOriginalWorkflow, ShouldClearAnimationCurves);
-
-                if (animationClip == null)
-                {
-                    return;
-                }
-
-                animationClip.name = motionName;
-
-                // Create animation clip.
-                if (AnimationClip == null)
-                {
-                    AssetDatabase.CreateAsset(animationClip, AssetPath.Replace(".motion3.json", ".anim"));
-                    AnimationClip = animationClip;
-                }
-
-                EditorUtility.CopySerialized(animationClip, AnimationClip);
-                EditorUtility.SetDirty(AnimationClip);
-
-                // Log event.
-                CubismImporter.LogReimport(AssetPath, AssetDatabase.GUIDToAssetPath(_animationClipGuid));
-            }
-
-            if (clip == null)
-            {
-                Debug.LogError("CubismFadeMotionImporter : Can not create Motion.");
+                ctx.LogImportError("Unable to find model3.json file.");
                 return;
             }
 
-            // Trigger event.
-            CubismImporter.SendMotionImportEvent(this, AnimationClip);
+            ctx.DependsOnSourceAsset(model3JsonPath);
 
-
-            // Apply changes.
-            if (isImporterDirty)
+            var model3Json = CubismModel3Json.LoadAtPath(model3JsonPath);
+            var motionName = Path.GetFileName(ctx.assetPath).Replace(".motion3.json", "");
+            var animationClip = motion3Json.ToAnimationClip(ShouldImportAsOriginalWorkflow, ShouldClearAnimationCurves);
+            if (animationClip == null)
             {
-                Save();
+                ctx.LogImportError("Unable to create animation clip.");
+                return;
             }
-            else
-            {
-                while (assetList.onPostImporting)
-                {
-                    Task.Delay(1);
-                }
 
-                assetListIndex = assetList.AssetPaths.Contains(motionPath)
-                    ? assetList.AssetPaths.IndexOf(motionPath)
-                    : -1;
+            animationClip.name = motionName;
+            ctx.AddObjectToAsset("animation", animationClip);
+            ctx.SetMainObject(animationClip);
 
-                if (assetListIndex >= 0)
-                {
-                    assetList.Remove(assetListIndex);
-                }
-                AssetDatabase.SaveAssets();
-                AssetDatabase.Refresh();
-            }
+            var importContext = new MotionImportContext(
+                ctx, motion3Json, animationClip, model3Json,
+                ShouldImportAsOriginalWorkflow, ShouldClearAnimationCurves);
+            OnDidImportMotion?.Invoke(importContext);
+            CubismImporter.SendMotionImportEvent(this, animationClip);
         }
 
-        #endregion
+        private static string FindModel3JsonFile(string startDirectory)
+        {
+            if (string.IsNullOrEmpty(startDirectory))
+                return null;
+
+            var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            var currentDirectory = startDirectory;
+
+            while (!string.IsNullOrEmpty(currentDirectory))
+            {
+                var fullDir = Path.GetFullPath(Path.Combine(projectRoot, currentDirectory));
+                if (Directory.Exists(fullDir))
+                {
+                    var files = Directory.GetFiles(fullDir, "*.model3.json");
+                    if (files.Length > 0)
+                    {
+                        var fileName = Path.GetFileName(files[0]);
+                        return Path.Combine(currentDirectory, fileName).Replace("\\", "/");
+                    }
+                }
+
+                currentDirectory = Path.GetDirectoryName(currentDirectory);
+                if (currentDirectory != null && !currentDirectory.StartsWith("Assets"))
+                    break;
+            }
+
+            return null;
+        }
     }
 }

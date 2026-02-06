@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright(c) Live2D Inc. All rights reserved.
  *
  * Use of this source code is governed by the Live2D Open Software license
@@ -13,6 +13,7 @@ using Live2D.Cubism.Framework.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -24,26 +25,117 @@ namespace Live2D.Cubism.Framework.MotionFade
     {
         #region Unity Event Handling
 
-        /// <summary>
-        /// Register fadeMotion importer.
-        /// </summary>
         [InitializeOnLoadMethod]
         private static void RegisterMotionImporter()
         {
-            CubismImporter.OnDidImportModel += OnModelImport;
-            CubismImporter.OnDidImportMotion += OnFadeMotionImport;
+            // Only use context (ScriptedImporter) path: fade list and fade motion data are sub-assets of model3.json / motion3.json.
+            // Legacy path (OnModelImportLegacy / OnFadeMotionImportLegacy) created separate .fade.asset and .fadeMotionList.asset and caused duplicates.
+            CubismModel3JsonImporter.OnDidImportModel += OnModelImportContext;
+            CubismMotion3JsonImporter.OnDidImportMotion += OnFadeMotionImportContext;
         }
 
         #endregion
 
-        #region Cubism Import Event Handling
+        #region Context-based (ScriptedImporter) handlers
+
+        private static void OnModelImportContext(IModelImportContext ctx)
+        {
+            var hasMotions = ctx.Model3Json != null
+                && ctx.Model3Json.FileReferences.Motions.Motions != null
+                && ctx.Model3Json.FileReferences.Motions.Motions.Any(g => g != null && g.Length > 0);
+            if (!hasMotions)
+                return;
+
+            var dataPath = Directory.GetParent(Application.dataPath).FullName + "/";
+            var assetPath = ctx.AssetPath.Replace(".model3.json", ".controller");
+            var animator = ctx.Model.GetComponent<Animator>();
+
+            if (!File.Exists(dataPath + assetPath))
+            {
+                var controller = CreateAnimatorController(assetPath);
+                if (!CubismUnityEditorMenu.ShouldImportAsOriginalWorkflow && animator != null)
+                    animator.runtimeAnimatorController = controller;
+            }
+            else if (animator != null)
+            {
+                if (CubismUnityEditorMenu.ShouldImportAsOriginalWorkflow)
+                    animator.runtimeAnimatorController = null;
+                else
+                    animator.runtimeAnimatorController = AssetDatabase.LoadAssetAtPath<AnimatorController>(assetPath);
+            }
+
+            var fadeController = (CubismFadeController)ctx.Model.GetOrAddComponent(typeof(CubismFadeController));
+            var fadeMotions = ScriptableObject.CreateInstance<CubismFadeMotionList>();
+            fadeMotions.name = $"{ctx.ModelName}.fadeMotionList";
+            ctx.AddSubObject(fadeMotions);
+            fadeController.CubismFadeMotionList = fadeMotions;
+
+            var directoryPath = Path.GetDirectoryName(ctx.AssetPath).Replace("\\", "/");
+            var motionFadeDataList = new List<CubismFadeMotionData>();
+            var instanceIdList = new List<int>();
+
+            foreach (var group in ctx.Model3Json.FileReferences.Motions.Motions ?? Array.Empty<CubismModel3Json.SerializableMotion[]>())
+            {
+                if (group == null) continue;
+                foreach (var motion in group)
+                {
+                    if (string.IsNullOrWhiteSpace(motion.File)) continue;
+                    var motionPath = Path.Combine(directoryPath, motion.File).Replace("\\", "/");
+                    ctx.DependsOnSourceAsset(motionPath);
+
+                    var motionAssets = AssetDatabase.LoadAllAssetsAtPath(motionPath);
+                    CubismFadeMotionData motionFadeData = null;
+                    AnimationClip clip = null;
+                    foreach (var obj in motionAssets ?? Array.Empty<UnityEngine.Object>())
+                    {
+                        if (obj is CubismFadeMotionData fd) motionFadeData = fd;
+                        if (obj is AnimationClip ac) clip = ac;
+                    }
+                    if (motionFadeData != null && clip != null)
+                    {
+                        motionFadeDataList.Add(motionFadeData);
+                        instanceIdList.Add(clip.GetInstanceID());
+                    }
+                }
+            }
+
+            fadeMotions.CubismFadeMotionObjects = motionFadeDataList.ToArray();
+            fadeMotions.MotionInstanceIds = instanceIdList.ToArray();
+        }
+
+        private static void OnFadeMotionImportContext(IMotionImportContext ctx)
+        {
+            var fadeMotionData = CubismFadeMotionData.CreateInstance(
+                ctx.Motion3Json,
+                ctx.MotionName,
+                ctx.AnimationClip.length,
+                ctx.ShouldImportAsOriginalWorkflow,
+                false,
+                ctx.Model3Json);
+            ctx.AddSubObject(fadeMotionData);
+
+            var events = new List<AnimationEvent>(AnimationUtility.GetAnimationEvents(ctx.AnimationClip));
+            var idx = events.FindIndex(e => e.functionName == "InstanceId");
+            if (idx < 0)
+            {
+                idx = events.Count;
+                events.Add(new AnimationEvent());
+            }
+            events[idx].time = 0;
+            events[idx].functionName = "InstanceId";
+            events[idx].intParameter = ctx.AnimationClip.GetInstanceID();
+            events[idx].messageOptions = SendMessageOptions.DontRequireReceiver;
+            AnimationUtility.SetAnimationEvents(ctx.AnimationClip, events.ToArray());
+        }
+
+        #endregion
+
+        #region Legacy (importer, model / importer, clip) handlers
 
         /// <summary>
-        /// Create animator controller for MotionFade.
+        /// Create animator controller for MotionFade (legacy path).
         /// </summary>
-        /// <param name="importer">Event source.</param>
-        /// <param name="model">Imported model.</param>
-        private static void OnModelImport(CubismModel3JsonImporter importer, CubismModel model)
+        private static void OnModelImportLegacy(CubismModel3JsonImporter importer, CubismModel model)
         {
             var dataPath = Directory.GetParent(Application.dataPath).FullName + "/";
             var assetPath = importer.AssetPath.Replace(".model3.json", ".controller");
@@ -192,11 +284,9 @@ namespace Live2D.Cubism.Framework.MotionFade
         }
 
         /// <summary>
-        /// Create oldFadeMotion.
+        /// Create oldFadeMotion (legacy path).
         /// </summary>
-        /// <param name="importer">Event source.</param>
-        /// <param name="animationClip">Imported motion.</param>
-        private static void OnFadeMotionImport(CubismMotion3JsonImporter importer, AnimationClip animationClip)
+        private static void OnFadeMotionImportLegacy(CubismMotion3JsonImporter importer, AnimationClip animationClip)
         {
             // Add reference of motion for Fade to list.
             var directoryName = Path.GetDirectoryName(importer.AssetPath);

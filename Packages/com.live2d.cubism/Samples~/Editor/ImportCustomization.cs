@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright(c) Live2D Inc. All rights reserved.
  *
  * Use of this source code is governed by the Live2D Open Software license
@@ -41,9 +41,10 @@ namespace Live2D.Cubism.Samples.Editor
         #region Cubism Import Event Handling
 
         /// <summary>
-        /// Customizes model importing.
+        /// Customizes model importing. model3.json is imported via ScriptedImporter; this event is still raised with the importer and model.
+        /// For ScriptedImporter-specific context (e.g. AddSubObject), subscribe to CubismModel3JsonImporter.OnDidImportModel(IModelImportContext) instead.
         /// </summary>
-        /// <param name="sender">Event source.</param>
+        /// <param name="sender">Event source (ScriptedImporter for model3.json).</param>
         /// <param name="model">Imported model.</param>
         private static void OnModelImport(CubismModel3JsonImporter sender, CubismModel model)
         {
