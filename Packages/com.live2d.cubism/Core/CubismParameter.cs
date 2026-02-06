@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright(c) Live2D Inc. All rights reserved.
  *
  * Use of this source code is governed by the Live2D Open Software license
@@ -18,7 +18,7 @@ namespace Live2D.Cubism.Core
     /// <summary>
     /// Single <see cref="CubismModel"/> parameter.
     /// </summary>
-    [CubismDontMoveOnReimport]
+    [CubismDontMoveOnReimport, DisallowMultipleComponent]
     public sealed class CubismParameter : MonoBehaviour
     {
         #region Factory Methods
@@ -47,7 +47,7 @@ namespace Live2D.Cubism.Core
 
 
                 buffer[i].transform.SetParent(root.transform);
-                buffer[i].Reset(unmanagedModel, i);
+                buffer[i].ResetParameter(unmanagedModel, i);
             }
 
 
@@ -143,6 +143,15 @@ namespace Live2D.Cubism.Core
         /// </summary>
         [SerializeField, HideInInspector]
         public float Value;
+
+        /// <summary>
+        /// Public accessor for current parameter value (script/inspector API).
+        /// </summary>
+        public float ParameterValue
+        {
+            get => Value;
+            set => Value = value;
+        }
 
         /// <summary>
         /// CubismModel cache.
@@ -315,7 +324,7 @@ namespace Live2D.Cubism.Core
         /// </summary>
         /// <param name="unmanagedModel">Handle to unmanaged model.</param>
         /// <param name="unmanagedIndex">Position in unmanaged arrays.</param>
-        private void Reset(CubismUnmanagedModel unmanagedModel, int unmanagedIndex)
+        private void ResetParameter(CubismUnmanagedModel unmanagedModel, int unmanagedIndex)
         {
             Revive(unmanagedModel);
 
