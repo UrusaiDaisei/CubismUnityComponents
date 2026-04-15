@@ -14,6 +14,9 @@ using Live2D.Cubism.Framework.Raycasting;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace Live2D.Cubism.Samples.OriginalWorkflow.Demo
 {
@@ -151,7 +154,7 @@ namespace Live2D.Cubism.Samples.OriginalWorkflow.Demo
             SpecifiedAnimationCheck();
 
 
-            if(!Input.GetMouseButtonDown(0))
+            if (!WasPointerPressedThisFrame())
             {
                 if (!_motionController.IsPlayingAnimation())
                 {
@@ -164,7 +167,8 @@ namespace Live2D.Cubism.Samples.OriginalWorkflow.Demo
 
 
             // Cast ray from pointer position.
-            var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            var screenPosition = GetPointerPosition();
+            var ray = Camera.main.ScreenPointToRay(screenPosition);
             var hitCount = _raycaster.Raycast(ray, _raycastResults);
 
 
@@ -232,6 +236,24 @@ namespace Live2D.Cubism.Samples.OriginalWorkflow.Demo
         private void AnimationEnded(int instanceId)
         {
             Debug.Log("AnimationEnded");
+        }
+
+        private static Vector2 GetPointerPosition()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return (Pointer.current != null) ? Pointer.current.position.ReadValue() : Vector2.zero;
+#else
+            return Input.mousePosition;
+#endif
+        }
+
+        private static bool WasPointerPressedThisFrame()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return Pointer.current != null && Pointer.current.press.wasPressedThisFrame;
+#else
+            return Input.GetMouseButtonDown(0);
+#endif
         }
     }
 }
