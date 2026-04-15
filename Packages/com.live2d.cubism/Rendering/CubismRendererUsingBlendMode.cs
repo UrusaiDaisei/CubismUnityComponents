@@ -274,7 +274,7 @@ namespace Live2D.Cubism.Rendering
         /// Applies common rendering texture for rendering.
         /// </summary>
         /// <param name="passData">Pass data containing render controllers and camera data.</param>
-        private void ApplyBlendedRenderTexture(CubismRenderPassFeature.CubismRenderPass.PassData passData)
+        private void ApplyBlendedRenderTexture(ICubismRenderPassData passData)
         {
             if (!RenderController?.CurrentFrameBuffer)
             {
@@ -296,7 +296,7 @@ namespace Live2D.Cubism.Rendering
         /// </summary>
         /// <param name="buffer">Command buffer to record draw commands.</param>
         /// <param name="passData">Pass data containing render controllers and camera data.</param>
-        public void DrawObject(CommandBuffer buffer, CubismRenderPassFeature.CubismRenderPass.PassData passData)//, RenderTexture frameBuffer)
+        public void DrawObject(CommandBuffer buffer, ICubismRenderPassData passData)//, RenderTexture frameBuffer)
         {
             if (!MeshRenderer)
             {
@@ -353,10 +353,10 @@ namespace Live2D.Cubism.Rendering
         /// </summary>
         /// <param name="buffer">Command buffer to record draw commands.</param>
         /// <param name="passData">Pass data containing render controllers and camera data.</param>
-        private void SetOffscreen(CommandBuffer buffer, CubismRenderPassFeature.CubismRenderPass.PassData passData)
+        private void SetOffscreen(CommandBuffer buffer, ICubismRenderPassData passData)
         {
             var currentOffscreenUnmanagedIndex = RenderController.CurrentOffscreenUnmanagedIndex;
-            SubmitDrawToParentOffscreen(ref passData, ref currentOffscreenUnmanagedIndex,
+            SubmitDrawToParentOffscreen(passData, ref currentOffscreenUnmanagedIndex,
                 buffer, this);
 
             // Ready the render target to the offscreen frame buffer.
@@ -456,7 +456,7 @@ namespace Live2D.Cubism.Rendering
         /// </summary>
         /// <param name="buffer">Command buffer to record draw commands.</param>
         /// <param name="passData">Pass data containing render controllers and camera data.</param>
-        internal void DrawMasks(CommandBuffer buffer, CubismRenderPassFeature.CubismRenderPass.PassData passData)
+        internal void DrawMasks(CommandBuffer buffer, ICubismRenderPassData passData)
         {
             // If the model doesn't have masks, return.
             if (!RenderController.HasMask)
@@ -544,7 +544,7 @@ namespace Live2D.Cubism.Rendering
         /// <param name="currentOffscreenUnmanagedIndex">Current offscreen's unmanaged index.</param>
         /// <param name="buffer">Command buffer to record draw commands.</param>
         /// <param name="targetRenderer">Current target rendering object.</param>
-        private void SubmitDrawToParentOffscreen(ref CubismRenderPassFeature.CubismRenderPass.PassData passData, ref int currentOffscreenUnmanagedIndex,
+        private void SubmitDrawToParentOffscreen(ICubismRenderPassData passData, ref int currentOffscreenUnmanagedIndex,
             CommandBuffer buffer, CubismRenderer targetRenderer)
         {
             if (passData == null
@@ -673,7 +673,7 @@ namespace Live2D.Cubism.Rendering
             currentOffscreenUnmanagedIndex = _previousOffscreenUnmanagedIndex;
 
             // If the current offscreen is the parent of the target renderer, draw to the parent offscreen.
-            SubmitDrawToParentOffscreen(ref passData, ref currentOffscreenUnmanagedIndex,
+            SubmitDrawToParentOffscreen(passData, ref currentOffscreenUnmanagedIndex,
                 buffer, targetRenderer);
         }
 
@@ -682,7 +682,7 @@ namespace Live2D.Cubism.Rendering
         /// </summary>
         /// <param name="buffer">Command buffer to record draw commands.</param>
         /// <param name="passData">Pass data containing render controllers and camera data.</param>
-        private void DrawDrawable(CommandBuffer buffer, CubismRenderPassFeature.CubismRenderPass.PassData passData)
+        private void DrawDrawable(CommandBuffer buffer, ICubismRenderPassData passData)
         {
             if (!RenderController)
             {
@@ -692,7 +692,7 @@ namespace Live2D.Cubism.Rendering
             if (RenderController.CurrentOffscreenUnmanagedIndex != -1)
             {
                 var currentOffscreenOwnerUnmanagedIndex = RenderController.CurrentOffscreenUnmanagedIndex;
-                SubmitDrawToParentOffscreen(ref passData, ref currentOffscreenOwnerUnmanagedIndex,
+                SubmitDrawToParentOffscreen(passData, ref currentOffscreenOwnerUnmanagedIndex,
                     buffer, this);
 
                 RenderController.CurrentOffscreenUnmanagedIndex = currentOffscreenOwnerUnmanagedIndex;
@@ -750,7 +750,7 @@ namespace Live2D.Cubism.Rendering
         /// <param name="previousOffscreen">Previous offscreen render texture.</param>
         /// <param name="currentOffscreenRenderer">Current offscreen renderer.</param>
         /// <param name="passData">Pass data containing render controllers and camera data.</param>
-        internal void DrawOffscreen(CommandBuffer buffer, RenderTexture previousOffscreen, CubismRenderer currentOffscreenRenderer, CubismRenderPassFeature.CubismRenderPass.PassData passData)
+        internal void DrawOffscreen(CommandBuffer buffer, RenderTexture previousOffscreen, CubismRenderer currentOffscreenRenderer, ICubismRenderPassData passData)
         {
             if (previousOffscreen == null
                 || currentOffscreenRenderer == null)
@@ -768,7 +768,7 @@ namespace Live2D.Cubism.Rendering
         /// <param name="buffer">Command buffer to record draw commands.</param>
         /// <param name="previousOffscreen">Previous offscreen render texture.</param>
         /// <param name="passData">Pass data containing render controllers and camera data.</param>
-        internal void DrawOffscreenMesh(CommandBuffer buffer, RenderTexture previousOffscreen, CubismRenderPassFeature.CubismRenderPass.PassData passData)
+        internal void DrawOffscreenMesh(CommandBuffer buffer, RenderTexture previousOffscreen, ICubismRenderPassData passData)
         {
             // Mask rendering.
             DrawMasks(buffer, passData);

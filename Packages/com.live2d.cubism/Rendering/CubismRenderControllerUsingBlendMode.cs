@@ -363,7 +363,7 @@ namespace Live2D.Cubism.Rendering
         /// </summary>
         /// <param name="commandBuffer">Command buffer to record draw commands.</param>
         /// <param name="passData">Pass data containing render controllers and camera data.</param>
-        internal void SubmitDrawOffscreen(CommandBuffer commandBuffer, CubismRenderPassFeature.CubismRenderPass.PassData passData)
+        internal void SubmitDrawOffscreen(CommandBuffer commandBuffer, ICubismRenderPassData passData)
         {
             if (!IsInitialized
                 || !Model
