@@ -9,4 +9,8 @@
 !/.gitattributes
 !/.editorconfig
 !/.gitignore
+!/package.json
 !/*.md
+!/scripts/
+!/scripts/*.js
+!/scripts/*.md
