@@ -11,7 +11,6 @@ using Live2D.Cubism.Framework;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using Live2D.Cubism.Rendering.Util;
 
 
 #if UNITY_2019_3_OR_NEWER
@@ -91,6 +90,30 @@ namespace Live2D.Cubism.Core
         public static void ResetMocReference(CubismModel model, CubismMoc moc)
         {
             model.Moc = moc;
+        }
+
+        /// <summary>
+        /// Resets non-serialized fields of a <see cref="CubismModel"/>.
+        /// </summary>
+        /// <remarks>
+        /// Call after <c>PrefabUtility.SaveAsPrefabAsset</c> to clear stale
+        /// component references that may have been cached by <see cref="OnValidate"/>
+        /// during the prefab replacement.
+        /// </remarks>
+        /// <param name="model">Target Cubism model.</param>
+        public static void ResetNonSerializedFields(CubismModel model)
+        {
+            if (model.TaskableModel != null)
+            {
+                model.TaskableModel.ReleaseUnmanaged();
+                model.TaskableModel = null;
+            }
+
+            model._parameters = null;
+            model._parts = null;
+            model._drawables = null;
+            model._offscreens = null;
+            model._canvasInformation = null;
         }
 
         /// <summary>
@@ -313,43 +336,9 @@ namespace Live2D.Cubism.Core
         private int LastTick { get; set; }
 
         /// <summary>
-        /// Is the model's MOC version higher than Cubism 5.0?
-        /// </summary>
-        public bool IsOverMocVersion50
-        {
-            get
-            {
-                return CubismCoreDll.MocVersion_50 < Moc.Version;
-            }
-        }
-
-        /// <summary>
-        /// Is this model using blend mode.
-        /// </summary>
-        [SerializeField, HideInInspector]
-        private bool _isUsingBlendMode;
-
-
-        /// <summary>
-        /// Get Flag is this model using blend mode.
-        /// </summary>
-        /// <returns>True if Is this model using blend mode; otherwise returns false.</returns>
-        public bool IsUsingBlendMode
-        {
-            get
-            {
-                return _isUsingBlendMode;
-            }
-            private set
-            {
-                _isUsingBlendMode = value;
-            }
-        }
-
-        /// <summary>
         /// Revives instance.
         /// </summary>
-        private void Revive()
+        internal void Revive()
         {
             // Return if already revive.
             if (IsRevived)
@@ -393,6 +382,28 @@ namespace Live2D.Cubism.Core
             }
             else
             {
+                // Filter stale entries whose UnmanagedIndex exceeds the new Moc count.
+                var unmanagedParameterCount = TaskableModel.UnmanagedModel.Parameters.Count;
+                if (Parameters.Length > unmanagedParameterCount)
+                {
+                    var filtered = new CubismParameter[unmanagedParameterCount];
+                    var n = 0;
+                    for (var i = 0; i < Parameters.Length; i++)
+                    {
+                        if (Parameters[i].UnmanagedIndex < unmanagedParameterCount)
+                        {
+                            filtered[n++] = Parameters[i];
+                        }
+                    }
+
+                    if (n < unmanagedParameterCount)
+                    {
+                        Array.Resize(ref filtered, n);
+                    }
+
+                    Parameters = filtered;
+                }
+
                 Parameters.Revive(TaskableModel.UnmanagedModel);
             }
 
@@ -407,6 +418,27 @@ namespace Live2D.Cubism.Core
             }
             else
             {
+                // Filter stale entries whose UnmanagedIndex exceeds the new Moc count.
+                var unmanagedPartCount = TaskableModel.UnmanagedModel.Parts.Count;
+                if (Parts.Length > unmanagedPartCount)
+                {
+                    var filtered = new CubismPart[unmanagedPartCount];
+                    var n = 0;
+                    for (var i = 0; i < Parts.Length; i++)
+                    {
+                        if (Parts[i].UnmanagedIndex < unmanagedPartCount)
+                        {
+                            filtered[n++] = Parts[i];
+                        }
+                    }
+
+                    if (n < unmanagedPartCount)
+                    {
+                         Array.Resize(ref filtered, n);
+                    }
+
+                    Parts = filtered;
+                }
                 Parts.Revive(TaskableModel.UnmanagedModel);
             }
 
@@ -421,12 +453,33 @@ namespace Live2D.Cubism.Core
             }
             else
             {
+                // Filter stale entries whose UnmanagedIndex exceeds the new Moc count.
+                var unmanagedDrawableCount = TaskableModel.UnmanagedModel.Drawables.Count;
+                if (Drawables.Length > unmanagedDrawableCount)
+                {
+                    var filtered = new CubismDrawable[unmanagedDrawableCount];
+                    var n = 0;
+                    for (var i = 0; i < Drawables.Length; i++)
+                    {
+                        if (Drawables[i].UnmanagedIndex < unmanagedDrawableCount)
+                        {
+                            filtered[n++] = Drawables[i];
+                        }
+                    }
+
+                    if (n < unmanagedDrawableCount)
+                    {
+                        Array.Resize(ref filtered, n);
+                    }
+
+                    Drawables = filtered;
+                }
+
                 Drawables.Revive(TaskableModel.UnmanagedModel);
             }
 
             if (0 < CubismCoreDll.GetOffscreenCount(TaskableModel.UnmanagedModel.Ptr))
             {
-                IsUsingBlendMode = true;
                 Offscreens = GetComponentsInChildren<CubismOffscreen>();
                 if (Offscreens.Length < 1 && (transform.Find("Offscreens") == null))
                 {
@@ -437,27 +490,29 @@ namespace Live2D.Cubism.Core
                 }
                 else
                 {
-                    Offscreens.Revive(TaskableModel.UnmanagedModel);
-                }
-            }
-
-            if (IsOverMocVersion50 && !IsUsingBlendMode)
-            {
-                var drawableCount = Drawables.Length;
-                for (var i = 0; i < drawableCount; ++i)
-                {
-                    var colorBlendType = Drawables[i].ColorBlend;
-                    var alphaBlendType = Drawables[i].AlphaBlend;
-                    if (colorBlendType == BlendTypes.ColorBlend.Normal &&
-                        alphaBlendType == BlendTypes.AlphaBlend.Over ||
-                        colorBlendType == BlendTypes.ColorBlend.Add ||
-                        colorBlendType == BlendTypes.ColorBlend.Multiply)
+                    // Filter stale entries whose UnmanagedIndex exceeds the new Moc count.
+                    var unmanagedOffscreenCount = TaskableModel.UnmanagedModel.Offscreens.Count;
+                    if (Offscreens.Length > unmanagedOffscreenCount)
                     {
-                        continue;
+                        var filtered = new CubismOffscreen[unmanagedOffscreenCount];
+                        var n = 0;
+                        for (var i = 0; i < Offscreens.Length; i++)
+                        {
+                            if (Offscreens[i].UnmanagedIndex < unmanagedOffscreenCount)
+                            {
+                                filtered[n++] = Offscreens[i];
+                            }
+                        }
+
+                        if (n < unmanagedOffscreenCount)
+                        {
+                            Array.Resize(ref filtered, n);
+                        }
+
+                        Offscreens = filtered;
                     }
 
-                    IsUsingBlendMode = true;
-                    break;
+                    Offscreens.Revive(TaskableModel.UnmanagedModel);
                 }
             }
 

@@ -42,7 +42,7 @@ namespace Live2D.Cubism.Editor.Inspectors
                 var ctrl = model.GetComponent<CubismRenderController>();
                 if (!ctrl.IsInitialized)
                 {
-                    ctrl.TryInitializeRenderers();
+                    ctrl.TryInitialize();
                 }
             }
 
@@ -52,30 +52,30 @@ namespace Live2D.Cubism.Editor.Inspectors
 
             EditorGUI.BeginChangeCheck();
 
-            // Display OverrideFlagForDrawObjectMultiplyColors.
+            // Display DrawObjectMultiplyColorEnabled.
             using (var scope = new EditorGUI.ChangeCheckScope())
             {
-                var overrideFlagForDrawObjectMultiplyColors = EditorGUILayout.Toggle("OverrideFlagForDrawObjectMultiplyColors", renderer.OverrideFlagForDrawObjectMultiplyColors);
+                var overrideFlagForDrawObjectMultiplyColors = EditorGUILayout.Toggle("DrawObjectMultiplyColorEnabled", renderer.DrawObjectMultiplyColorEnabled);
 
                 if (scope.changed)
                 {
                     foreach (CubismRenderer cubismRenderer in targets)
                     {
-                        cubismRenderer.OverrideFlagForDrawObjectMultiplyColors = overrideFlagForDrawObjectMultiplyColors;
+                        cubismRenderer.DrawObjectMultiplyColorEnabled = overrideFlagForDrawObjectMultiplyColors;
                     }
                 }
             }
 
-            // Display OverrideFlagForDrawObjectScreenColors.
+            // Display DrawObjectScreenColorEnabled.
             using (var scope = new EditorGUI.ChangeCheckScope())
             {
-                var overrideFlagForDrawObjectScreenColors = EditorGUILayout.Toggle("OverrideFlagForDrawObjectScreenColors", renderer.OverrideFlagForDrawObjectScreenColors);
+                var overrideFlagForDrawObjectScreenColors = EditorGUILayout.Toggle("DrawObjectScreenColorEnabled", renderer.DrawObjectScreenColorEnabled);
 
                 if (scope.changed)
                 {
                     foreach (CubismRenderer cubismRenderer in targets)
                     {
-                        cubismRenderer.OverrideFlagForDrawObjectScreenColors = overrideFlagForDrawObjectScreenColors;
+                        cubismRenderer.DrawObjectScreenColorEnabled = overrideFlagForDrawObjectScreenColors;
                     }
                 }
             }
@@ -130,16 +130,16 @@ namespace Live2D.Cubism.Editor.Inspectors
                 }
             }
 
-            // Display material.
+            // Display material (DrawMaterial is the actual rendering material).
             using (var scope = new EditorGUI.ChangeCheckScope())
             {
-                var material = EditorGUILayout.ObjectField("Material", renderer.Material, typeof(Material), true) as Material;
+                var material = EditorGUILayout.ObjectField("Material", renderer.DrawMaterial, typeof(Material), true) as Material;
 
                 if (scope.changed)
                 {
                     foreach (CubismRenderer cubismRenderer in targets)
                     {
-                        cubismRenderer.Material = material;
+                        cubismRenderer.DrawMaterial = material;
                     }
                 }
             }
@@ -180,10 +180,6 @@ namespace Live2D.Cubism.Editor.Inspectors
                 {
                     EditorUtility.SetDirty(cubismRenderer);
                     EditorUtility.SetDirty(cubismRenderer.MeshRenderer);
-                    if (cubismRenderer.MeshFilter)
-                    {
-                        EditorUtility.SetDirty(cubismRenderer.MeshFilter);
-                    }
                 }
             }
 
@@ -197,10 +193,6 @@ namespace Live2D.Cubism.Editor.Inspectors
             {
                 foreach (CubismRenderer cubismRenderer in targets)
                 {
-                    if (cubismRenderer.MeshFilter)
-                    {
-                        cubismRenderer.MeshFilter.hideFlags ^= HideFlags.HideInInspector;
-                    }
                     cubismRenderer.MeshRenderer.hideFlags ^= HideFlags.HideInInspector;
                 }
             }

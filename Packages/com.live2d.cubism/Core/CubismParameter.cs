@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright(c) Live2D Inc. All rights reserved.
  *
  * Use of this source code is governed by the Live2D Open Software license
@@ -144,6 +144,9 @@ namespace Live2D.Cubism.Core
         [SerializeField, HideInInspector]
         internal float Value;
 
+        /// <summary>
+        /// Public accessor for current parameter value (script/inspector API).
+        /// </summary>
         public float ParameterValue
         {
             get => Value;

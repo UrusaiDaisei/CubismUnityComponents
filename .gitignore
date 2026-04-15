@@ -1,6 +1,5 @@
 *
 !*/
-!/[Aa]ssets/[Ss]cripts/**/*
 !/[Pp]ackages/com.live2d.cubism/**/*
 /[Pp]ackages/com.live2d.cubism/Plugins/**/*.a
 /[Pp]ackages/com.live2d.cubism/Plugins/**/*.bc
@@ -10,6 +9,8 @@
 !/.gitattributes
 !/.editorconfig
 !/.gitignore
+!/package.json
 !/*.md
+!/docs/**/*
+!/scripts/**/*
 !/.cursor/**/*
-!/.vscode/**/*

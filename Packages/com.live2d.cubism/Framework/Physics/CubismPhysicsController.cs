@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright(c) Live2D Inc. All rights reserved.
  *
  * Use of this source code is governed by the Live2D Open Software license
@@ -9,7 +9,6 @@
 using System;
 using Live2D.Cubism.Core;
 using Live2D.Cubism.Rendering;
-using Live2D.Cubism.Rendering.Masking;
 using UnityEngine;
 
 
@@ -85,14 +84,8 @@ namespace Live2D.Cubism.Framework.Physics
             Rig.Stabilization();
 
             var renderController = gameObject.GetComponent<CubismRenderController>();
-            var maskController = gameObject.GetComponent<CubismMaskController>();
 
             renderController.OnLateUpdate();
-
-            if (maskController)
-            {
-                maskController.OnLateUpdate();
-            }
         }
 
         /// <summary>

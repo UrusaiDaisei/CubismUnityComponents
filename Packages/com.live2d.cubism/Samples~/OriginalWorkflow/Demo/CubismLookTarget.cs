@@ -8,6 +8,9 @@
 
 using Live2D.Cubism.Framework.LookAt;
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace Live2D.Cubism.Samples.OriginalWorkflow.Demo
 {
@@ -19,16 +22,13 @@ namespace Live2D.Cubism.Samples.OriginalWorkflow.Demo
         /// <returns>Mouse coordinates.</returns>
         public Vector3 GetPosition()
         {
-            if (!Input.GetMouseButton(0))
-            {
-                return Vector3.zero;
-            }
+            var targetPosition = GetPointerPosition();
 
-            var targetPosition = Input.mousePosition;
+            var z = Camera.main.WorldToScreenPoint(transform.position).z;
+            targetPosition.z = z;
 
-            targetPosition = (Camera.main.ScreenToViewportPoint(targetPosition) * 2) - Vector3.one;
-
-            return targetPosition;
+            var worldPosition = Camera.main.ScreenToWorldPoint(targetPosition);
+            return worldPosition;
         }
 
         /// <summary>
@@ -37,7 +37,25 @@ namespace Live2D.Cubism.Samples.OriginalWorkflow.Demo
         /// <returns><see langword="true"/> if the target is active; <see langword="false"/> otherwise.</returns>
         public bool IsActive()
         {
-            return true;
+            return IsPointerPressed();
+        }
+
+        private static Vector3 GetPointerPosition()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return (Pointer.current != null) ? (Vector3)Pointer.current.position.ReadValue() : Vector3.zero;
+#else
+            return Input.mousePosition;
+#endif
+        }
+
+        private static bool IsPointerPressed()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return Pointer.current != null && Pointer.current.press.isPressed;
+#else
+            return Input.GetMouseButton(0);
+#endif
         }
     }
 }

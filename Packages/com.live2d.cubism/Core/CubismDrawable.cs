@@ -163,6 +163,14 @@ namespace Live2D.Cubism.Core
             private set => _unmanagedIndex = value;
         }
 
+        /// <summary>
+        /// Whether unmanaged drawable data is currently available.
+        /// </summary>
+        internal bool HasUnmanagedDrawableData
+        {
+            get { return UnmanagedDrawables != null && UnmanagedIndex >= 0; }
+        }
+
         private bool _wasVertexPositionsDirtyThisFrame;
 
         private void LateUpdate()

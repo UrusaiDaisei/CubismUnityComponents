@@ -5,7 +5,6 @@
  * that can be found at https://www.live2d.com/eula/live2d-open-software-license-agreement_en.html.
  */
 
-
 using Live2D.Cubism.Framework.Expression;
 using Live2D.Cubism.Framework.Json;
 using System.Collections.Generic;
@@ -16,7 +15,6 @@ using UnityEngine;
 using Packages.Live2D.Editor.Importers.New;
 using Live2D.Cubism.Framework;
 using UnityEditor.AssetImporters;
-using Packages.Live2D.Editor.Importers;
 
 namespace Live2D.Cubism.Editor.Importers
 {

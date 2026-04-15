@@ -4,15 +4,19 @@
 
 # Notices
 
-## [Caution] About Support for Input System Package in Samples (2025-08-26)
+## [Restrictions] Support for HarmonyOS NEXT and Tuanjie (2026-04-02)
 
-The Samples in Cubism SDK for Unity use the traditional `Input Manager` for input handling.
-Therefore, if your project is set to use only the `Input System Package`, errors may occur when running scenes.
+Cubism SDK for Unity R5 beta3 and later uses the Render Graph Module, and therefore does not support HarmonyOS NEXT or Tuanjie.
 
-If necessary, please change your project settings to use the `Input Manager` by following these steps:
+We will announce support availability for this product in a future release once Tuanjie supports the Render Graph Module.
 
-1. Open `Project Settings` -> `Player`.
-2. Set `Active Input Handling` to `both`.
+
+## [Restrictions] Drawing Order of Drawables Under Parts Containing Offscreen Rendering When the Drawing Order of Offscreen Rendering Changes (2026-01-08)
+
+In the Cubism SDK for Unity, when the drawing order of offscreen rendering is changed, the drawing order of Drawables under the parts containing the offscreen rendering does not change.
+We are considering adding a feature in the future to synchronize the drawing order of Drawables under the parts containing offscreen rendering with changes to the drawing order of offscreen rendering.
+
+The supported version and release schedule will be announced in future updates.
 
 
 ## [Restrictions] Regarding lip-sync support from AudioClips when exporting to WebGL. (2024-11-28)

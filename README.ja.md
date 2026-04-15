@@ -18,11 +18,19 @@ SDKパッケージのダウンロードページをお探しの場合は、[ダ�
 
 ご使用前に[お知らせ](NOTICE.ja.md)をお読みください。
 
-## Cubism 5新機能や過去バージョンとの互換性について
+## Cubism 5.3新機能や過去バージョンとの互換性について
 
-本 SDK はCubism 5に対応した製品です。  
-Cubism 5 Editorに搭載された新機能のSDK対応については [こちら](https://docs.live2d.com/cubism-sdk-manual/cubism-5-new-functions/)をご確認ください。  
-過去バージョンのCubism SDKとの互換性については [こちら](https://docs.live2d.com/cubism-sdk-manual/compatibility-with-cubism-5/)をご確認ください。
+本 SDK はCubism 5.3に対応した製品です。  
+Cubism 5.3 Editorに搭載された新機能のSDK対応については [こちら](https://docs.live2d.com/cubism-sdk-manual/cubism-5-3-new-functions/)をご確認ください。  
+過去バージョンのCubism SDKとの互換性については [こちら](https://docs.live2d.com/cubism-sdk-manual/compatibility-with-cubism-5-3/)をご確認ください。
+
+## 動作要件
+
+本 SDK は **Universal Render Pipeline（URP）** を前提としており、モデルの描画にはカスタムレンダーパスの利用が必要です。
+詳しくは[Cubism 5 SDK for Unity R4_1 以前との違い](https://docs.live2d.com/cubism-sdk-manual/differences-from-before-unity-r4_1/) や [Built-in Render PipelineからURPへの移行について](https://docs.live2d.com/cubism-sdk-manual/migration-from-birp-to-urp/) をご確認ください。
+なお**Built-in Render Pipeline** および **High Definition Render Pipeline（HDRP）** はサポートしておりません。
+
+**Input System** パッケージ（`com.unity.inputsystem`）との併用を想定しています。旧来の Input Manager のみのプロジェクトでは、Unity の手順に従い Input System の追加やプロジェクト設定の調整が必要になる場合があります。
 
 ## 構造
 
@@ -54,24 +62,17 @@ Unity Editor拡張機能は、`./Assets/Live2D/Cubism/Editor`にあります。
 
 | Unity | バージョン |
 | --- | --- |
-| Latest | 6000.2.6f2 |
-| LTS | 6000.0.58f2 |
+| LTS | 6000.3.11f1 |
+| LTS | 6000.0.71f1 |
 
 | ライブラリ / ツール | バージョン |
 | --- | --- |
 | Android SDK / NDK | *2 |
-| Visual Studio 2022 | 17.14.16 |
-| Windows SDK | 10.0.26100.6584 |
-| Xcode | 26.1 |
+| Visual Studio 2022 | 17.14.29 |
+| Windows SDK | 10.0.26100.7705 |
+| Xcode | 26.3 |
 
 *2 Unityに組み込まれたライブラリまたは推奨ライブラリを使用してください。
-
-| HarmonyOS NEXT 対応ツール | バージョン |
-| --- | --- |
-| Tuanjie | 1.5.2 |
-| DevEco Studio *3 | 5.0.13.200 |
-
-*3 中国国外でのHarmonyOS NEXT向けビルドはDevEcoを通じてビルドする必要があります。
 
 ### C#コンパイラ
 
@@ -88,13 +89,12 @@ https://docs.unity3d.com/ja/2018.4/Manual/CSharpCompiler.html
 | プラットフォーム | バージョン |
 | --- | --- |
 | Android | 16 |
-| iOS | 26.0.1 |
-| iPadOS | 26.0.1 |
+| iOS | 26.4 |
+| iPadOS | 26.4 |
 | Ubuntu | 24.04.3 |
-| macOS | 26.0 |
-| Windows 11 | 24H2 (*4) |
-| Google Chrome | 141.0.7390.66 |
-| HarmonyOS NEXT | 5.0.0.102 |
+| macOS | 26.4 |
+| Windows 11 | 25H2 (*4) |
+| Google Chrome | 146.0.7680.165 |
 
 *4 UWP向けビルドは動作確認をしておりません。
 

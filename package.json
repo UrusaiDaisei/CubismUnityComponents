@@ -1,0 +1,12 @@
+{
+  "name": "cubism-unity-components-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local developer scripts for packaged-version merge workflow.",
+  "scripts": {
+    "setup:yamlmerge": "node scripts/setup_unityyamlmerge.js",
+    "setup:git-rerere": "git config --global rerere.enabled true",
+    "merge:sync": "node scripts/sync_master_to_packaged.js --source origin/master --target packaged-version",
+    "merge:validate": "node scripts/validate_packaged_branch.js"
+  }
+}

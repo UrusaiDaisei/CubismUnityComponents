@@ -7,8 +7,6 @@
 
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Animations;
-
 
 namespace Live2D.Cubism.Framework.MotionFade
 {
@@ -129,11 +127,8 @@ namespace Live2D.Cubism.Framework.MotionFade
         /// <param name="animator">Animator.</param>
         /// <param name="stateInfo">Animator state info.</param>
         /// <param name="layerIndex">Index of the layer.</param>
-        /// <param name="controller">Animation controller playable.</param>
-        public override void OnStateEnter(Animator animator, AnimatorStateInfo stateInfo, int layerIndex, AnimatorControllerPlayable controller)
+        public override void OnStateEnter(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
         {
-            return;
-
             var fadeController = animator.gameObject.GetComponent<CubismFadeController>();
 
             // Fail silently...
@@ -150,14 +145,14 @@ namespace Live2D.Cubism.Framework.MotionFade
                 ? 1.0f
                 : animator.GetLayerWeight(_layerIndex);
 
-            var animatorClipInfo = controller.GetNextAnimatorClipInfo(layerIndex);
+            var animatorClipInfo = animator.GetNextAnimatorClipInfo(layerIndex);
 
             _isDefaulState = (animatorClipInfo.Length == 0);
 
             if (_isDefaulState)
             {
                 // Get the motion of Default State only for the first time.
-                animatorClipInfo = controller.GetCurrentAnimatorClipInfo(layerIndex);
+                animatorClipInfo = animator.GetCurrentAnimatorClipInfo(layerIndex);
             }
 
             // Set playing motions end time.

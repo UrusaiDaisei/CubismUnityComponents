@@ -10,7 +10,6 @@
 using Live2D.Cubism.Editor;
 using Live2D.Cubism.Editor.Importers;
 using Live2D.Cubism.Framework.Json;
-using Live2D.Cubism.Rendering.Masking;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -126,6 +125,11 @@ namespace Packages.Live2D.Editor.Importers.New
             {
                 ctx.LogImportError("unable to import model data.");
                 return;
+            }
+
+            if (moc != null)
+            {
+                CubismModel.ResetMocReference(model, moc);
             }
 
             ctx.AddObjectToAsset("model", model.gameObject);

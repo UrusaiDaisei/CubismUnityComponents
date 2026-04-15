@@ -6,18 +6,17 @@
  */
 
 
-using Live2D.Cubism.Editor.Deleters;
+// using Live2D.Cubism.Editor.Deleters;
 using Live2D.Cubism.Editor.Importers;
-using Live2D.Cubism.Rendering;
-using Live2D.Cubism.Rendering.Masking;
-using Live2D.Cubism.Rendering.Util;
-using System;
-using System.IO;
-using System.Linq;
-using System.Xml.Linq;
+// using Live2D.Cubism.Rendering;
+// using Live2D.Cubism.Rendering.Util;
+// using System;
+// using System.IO;
+// using System.Linq;
+// using System.Xml.Linq;
 using UnityEditor;
-using UnityEngine;
-using UnityEngine.Rendering;
+// using UnityEngine;
+// using UnityEngine.Rendering;
 
 
 namespace Live2D.Cubism.Editor
@@ -29,17 +28,39 @@ namespace Live2D.Cubism.Editor
     {
         #region Unity Event Handling
 
-#if !UNITY_2017_3_OR_NEWER
-        /// <summary>
-        /// Called by Unity. Makes sure <see langword="unsafe"/> code is allowed.
-        /// </summary>
-        // ReSharper disable once InconsistentNaming
-        public static void OnGeneratedCSProjectFiles()
-        {
-            AllowUnsafeCode();
-        }
-#endif
+// #if !UNITY_2017_3_OR_NEWER
+//         /// <summary>
+//         /// Called by Unity. Makes sure <see langword="unsafe"/> code is allowed.
+//         /// </summary>
+//         // ReSharper disable once InconsistentNaming
+//         public static void OnGeneratedCSProjectFiles()
+//         {
+//             AllowUnsafeCode();
+//         }
+// #endif
 
+
+        /// <summary>
+        /// Called by Unity after asset pipeline changes are processed.
+        /// Bridges the current ScriptedImporter flow with the legacy
+        /// CubismCreatedAssetList post-import finalization step.
+        /// </summary>
+        /// <param name="importedAssetPaths">Paths of imported assets.</param>
+        /// <param name="deletedAssetPaths">Paths of removed assets.</param>
+        /// <param name="movedAssetPaths">Paths of moved assets.</param>
+        /// <param name="movedFromAssetPaths">Paths of moved assets before moving.</param>
+        private static void OnPostprocessAllAssets(
+            string[] importedAssetPaths,
+            string[] deletedAssetPaths,
+            string[] movedAssetPaths,
+            string[] movedFromAssetPaths)
+        {
+            // Current importers populate CubismCreatedAssetList during import events.
+            // Finalize those assets here where AssetDatabase operations are allowed.
+            CubismCreatedAssetList.GetInstance().OnPostImport();
+        }
+
+        /*
 
         /// <summary>
         /// Called by Unity on asset import. Handles importing of Cubism related assets.
@@ -97,70 +118,72 @@ namespace Live2D.Cubism.Editor
             }
 
         }
+        */
 
         #endregion
 
-        #region C# Project Patching
+        // #region C# Project Patching
 
-        /// <summary>
-        /// Makes sure <see langword="unsafe"/> code is allowed in the runtime project.
-        /// </summary>
-        private static void AllowUnsafeCode()
-        {
-            foreach (var csproj in Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csproj"))
-            {
-                // Skip Editor assembly.
-                if (csproj.EndsWith(".Editor.csproj"))
-                {
-                    continue;
-                }
-
-
-                var document = XDocument.Load(csproj);
-                var project = document.Root;
+        // /// <summary>
+        // /// Makes sure <see langword="unsafe"/> code is allowed in the runtime project.
+        // /// </summary>
+        // private static void AllowUnsafeCode()
+        // {
+        //     foreach (var csproj in Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csproj"))
+        //     {
+        //         // Skip Editor assembly.
+        //         if (csproj.EndsWith(".Editor.csproj"))
+        //         {
+        //             continue;
+        //         }
 
 
-                // Allow unsafe code.
-                for (var propertyGroup = project.FirstNode as XElement; propertyGroup != null; propertyGroup = propertyGroup.NextNode as XElement)
-                {
-                    // Skip non-relevant groups.
-                    if (!propertyGroup.ToString().Contains("PropertyGroup") || !propertyGroup.ToString().Contains("$(Configuration)|$(Platform)"))
-                    {
-                        continue;
-                    }
+        //         var document = XDocument.Load(csproj);
+        //         var project = document.Root;
 
 
-                    // Add unsafe-block element if necessary.
-                    if (!propertyGroup.ToString().Contains("AllowUnsafeBlocks"))
-                    {
-                        var nameSpace = propertyGroup.GetDefaultNamespace();
+        //         // Allow unsafe code.
+        //         for (var propertyGroup = project.FirstNode as XElement; propertyGroup != null; propertyGroup = propertyGroup.NextNode as XElement)
+        //         {
+        //             // Skip non-relevant groups.
+        //             if (!propertyGroup.ToString().Contains("PropertyGroup") || !propertyGroup.ToString().Contains("$(Configuration)|$(Platform)"))
+        //             {
+        //                 continue;
+        //             }
 
 
-                        propertyGroup.Add(new XElement(nameSpace + "AllowUnsafeBlocks", "true"));
-                    }
+        //             // Add unsafe-block element if necessary.
+        //             if (!propertyGroup.ToString().Contains("AllowUnsafeBlocks"))
+        //             {
+        //                 var nameSpace = propertyGroup.GetDefaultNamespace();
 
 
-                    // Make sure unsafe-block element is always set to true.
-                    for (var allowUnsafeBlocks = propertyGroup.FirstNode as XElement; allowUnsafeBlocks != null; allowUnsafeBlocks = allowUnsafeBlocks.NextNode as XElement)
-                    {
-                        if (!allowUnsafeBlocks.ToString().Contains("AllowUnsafeBlocks"))
-                        {
-                            continue;
-                        }
+        //                 propertyGroup.Add(new XElement(nameSpace + "AllowUnsafeBlocks", "true"));
+        //             }
 
 
-                        allowUnsafeBlocks.SetValue("true");
-                    }
-                }
+        //             // Make sure unsafe-block element is always set to true.
+        //             for (var allowUnsafeBlocks = propertyGroup.FirstNode as XElement; allowUnsafeBlocks != null; allowUnsafeBlocks = allowUnsafeBlocks.NextNode as XElement)
+        //             {
+        //                 if (!allowUnsafeBlocks.ToString().Contains("AllowUnsafeBlocks"))
+        //                 {
+        //                     continue;
+        //                 }
 
 
-                // Store changes.
-                document.Save(csproj);
-            }
-        }
+        //                 allowUnsafeBlocks.SetValue("true");
+        //             }
+        //         }
 
-        #endregion
 
+        //         // Store changes.
+        //         document.Save(csproj);
+        //     }
+        // }
+
+        // #endregion
+
+/*
         #region Resources Generation
 
         /// <summary>
@@ -265,7 +288,7 @@ namespace Live2D.Cubism.Editor
         private static void GenerateBuiltinResources()
         {
             var resourcesRoot = AssetDatabase
-                .GetAssetPath(CubismBuiltinShaders.Unlit)
+                .GetAssetPath(CubismBuiltinShaders.BlendMode)
                 .Replace("/Shaders/Unlit.shader", "");
 
             var materialsRoot = resourcesRoot + "/Materials";
@@ -300,7 +323,7 @@ namespace Live2D.Cubism.Editor
 
 
                 // Create non-masked materials.
-                material = new Material (CubismBuiltinShaders.Unlit)
+                material = new Material (CubismBuiltinShaders.BlendMode)
                 {
                     name = "Unlit"
                 };
@@ -309,7 +332,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material (CubismBuiltinShaders.Unlit)
+                material = new Material (CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitAdditive"
                 };
@@ -318,7 +341,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material (CubismBuiltinShaders.Unlit)
+                material = new Material (CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitMultiply"
                 };
@@ -328,7 +351,7 @@ namespace Live2D.Cubism.Editor
 
 
                 // Create masked materials.
-                material = new Material (CubismBuiltinShaders.Unlit)
+                material = new Material (CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitMasked"
                 };
@@ -338,7 +361,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material (CubismBuiltinShaders.Unlit)
+                material = new Material (CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitAdditiveMasked"
                 };
@@ -348,7 +371,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material (CubismBuiltinShaders.Unlit)
+                material = new Material (CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitMultiplyMasked"
                 };
@@ -359,7 +382,7 @@ namespace Live2D.Cubism.Editor
 
 
                 // Create inverted mask materials.
-                material = new Material (CubismBuiltinShaders.Unlit)
+                material = new Material (CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitMaskedInverted"
                 };
@@ -369,7 +392,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material (CubismBuiltinShaders.Unlit)
+                material = new Material (CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitAdditiveMaskedInverted"
                 };
@@ -379,7 +402,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material (CubismBuiltinShaders.Unlit)
+                material = new Material (CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitMultiplyMaskedInverted"
                 };
@@ -390,7 +413,7 @@ namespace Live2D.Cubism.Editor
 
 
                 // Create non-masked materials.
-                material = new Material(CubismBuiltinShaders.Unlit)
+                material = new Material(CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitCulling"
                 };
@@ -400,7 +423,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material(CubismBuiltinShaders.Unlit)
+                material = new Material(CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitAdditiveCulling"
                 };
@@ -410,7 +433,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material(CubismBuiltinShaders.Unlit)
+                material = new Material(CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitMultiplyCulling"
                 };
@@ -421,7 +444,7 @@ namespace Live2D.Cubism.Editor
 
 
                 // Create masked materials.
-                material = new Material(CubismBuiltinShaders.Unlit)
+                material = new Material(CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitMaskedCulling"
                 };
@@ -432,7 +455,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material(CubismBuiltinShaders.Unlit)
+                material = new Material(CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitAdditiveMaskedCulling"
                 };
@@ -443,7 +466,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material(CubismBuiltinShaders.Unlit)
+                material = new Material(CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitMultiplyMaskedCulling"
                 };
@@ -455,7 +478,7 @@ namespace Live2D.Cubism.Editor
 
 
                 // Create inverted mask materials.
-                material = new Material(CubismBuiltinShaders.Unlit)
+                material = new Material(CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitMaskedInvertedCulling"
                 };
@@ -466,7 +489,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material(CubismBuiltinShaders.Unlit)
+                material = new Material(CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitAdditiveMaskedInvertedCulling"
                 };
@@ -477,7 +500,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                material = new Material(CubismBuiltinShaders.Unlit)
+                material = new Material(CubismBuiltinShaders.BlendMode)
                 {
                     name = "UnlitMultiplyMaskedInvertedCulling"
                 };
@@ -488,7 +511,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, string.Format("{0}/{1}.mat", materialsRoot, material.name));
 
 
-                EditorUtility.SetDirty(CubismBuiltinShaders.Unlit);
+                EditorUtility.SetDirty(CubismBuiltinShaders.BlendMode);
                 AssetDatabase.SaveAssets();
             }
 
@@ -506,16 +529,6 @@ namespace Live2D.Cubism.Editor
 
             #endregion
 
-            // Create global mask texture.
-            if (CubismMaskTexture.GlobalMaskTexture == null)
-            {
-                var globalMaskTexture = ScriptableObject.CreateInstance<CubismMaskTexture>();
-
-                globalMaskTexture.name = "GlobalMaskTexture";
-
-
-                AssetDatabase.CreateAsset(globalMaskTexture, string.Format("{0}/{1}.asset", resourcesRoot, globalMaskTexture.name));
-            }
         }
 
         #region Cubism 5.3
@@ -579,7 +592,7 @@ namespace Live2D.Cubism.Editor
             if (LoadMaterialFromPath("Live2D/Cubism/Materials/BlendMode/" + materialName) == null)
             {
                 // Create non-masked materials.
-                var material = new Material(CubismBuiltinShaders.Plane)
+                var material = new Material(CubismBuiltinShaders.Blit)
                 {
                     name = materialName
                 };
@@ -587,7 +600,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, $"{materialsDir}/{material.name}.mat");
             }
 
-            EditorUtility.SetDirty(CubismBuiltinShaders.Plane);
+            EditorUtility.SetDirty(CubismBuiltinShaders.Blit);
             AssetDatabase.SaveAssets();
         }
 
@@ -603,7 +616,7 @@ namespace Live2D.Cubism.Editor
             if (LoadMaterialFromPath("Live2D/Cubism/Materials/BlendMode/" + materialName) == null)
             {
                 // Create non-masked materials.
-                var material = new Material(CubismBuiltinShaders.BlendMask)
+                var material = new Material(CubismBuiltinShaders.Mask)
                 {
                     name = materialName
                 };
@@ -616,7 +629,7 @@ namespace Live2D.Cubism.Editor
             if (LoadMaterialFromPath("Live2D/Cubism/Materials/BlendMode/" + materialName) == null)
             {
                 // Create non-masked materials.
-                var material = new Material(CubismBuiltinShaders.BlendMask)
+                var material = new Material(CubismBuiltinShaders.Mask)
                 {
                     name = materialName
                 };
@@ -624,7 +637,7 @@ namespace Live2D.Cubism.Editor
                 AssetDatabase.CreateAsset(material, $"{materialsDir}/{material.name}.mat");
             }
 
-            EditorUtility.SetDirty(CubismBuiltinShaders.BlendMask);
+            EditorUtility.SetDirty(CubismBuiltinShaders.Mask);
             AssetDatabase.SaveAssets();
         }
 
@@ -971,5 +984,6 @@ namespace Live2D.Cubism.Editor
         #endregion
 
         #endregion
+        */
     }
 }

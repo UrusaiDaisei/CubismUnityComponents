@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using Live2D.Cubism.Editor;
+using Live2D.Cubism.Editor.Importers;
 using Live2D.Cubism.Framework.Json;
 using UnityEditor;
 using UnityEditor.AssetImporters;
@@ -124,7 +125,7 @@ namespace Packages.Live2D.Editor.Importers
             }
 
             var parentDirectory = Path.GetDirectoryName(ctx.assetPath);
-            var model3JsonPath = FindModel3JsonFile(parentDirectory);
+            var model3JsonPath = FindModel3JsonFile(parentDirectory, ctx.assetPath);
             if (model3JsonPath == null)
             {
                 ctx.LogImportError("unable to find model3json file.");
@@ -184,17 +185,30 @@ namespace Packages.Live2D.Editor.Importers
         /// Searches for a model3.json file in the current directory and its parent directories.
         /// </summary>
         /// <param name="startDirectory">The directory to start searching from.</param>
+        /// <param name="motionAssetPath">The motion3.json asset path being imported.</param>
         /// <returns>The path to the model3.json file, or null if not found.</returns>
-        private string FindModel3JsonFile(string startDirectory)
+        private string FindModel3JsonFile(string startDirectory, string motionAssetPath)
         {
             var currentDirectory = startDirectory;
+            var normalizedMotionPath = Path.GetFullPath(motionAssetPath).Replace("\\", "/");
 
             while (currentDirectory != null)
             {
-                var model3JsonPath = Directory.EnumerateFiles(currentDirectory, "*.model3.json").FirstOrDefault();
-                if (model3JsonPath != null)
+                var model3JsonPaths = Directory.EnumerateFiles(currentDirectory, "*.model3.json").ToArray();
+                if (model3JsonPaths.Length > 0)
                 {
-                    return model3JsonPath;
+                    // Prefer the model3.json that explicitly references this motion file.
+                    for (var i = 0; i < model3JsonPaths.Length; i++)
+                    {
+                        var modelPath = model3JsonPaths[i];
+                        if (DoesModelReferenceMotion(modelPath, normalizedMotionPath))
+                        {
+                            return modelPath.Replace("\\", "/");
+                        }
+                    }
+
+                    // Fallback to the first candidate for backward compatibility.
+                    return model3JsonPaths[0].Replace("\\", "/");
                 }
 
                 // Move up to parent directory
@@ -202,6 +216,63 @@ namespace Packages.Live2D.Editor.Importers
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Checks whether a model3.json references the specified motion asset path.
+        /// </summary>
+        /// <param name="model3JsonPath">The model3.json path to inspect.</param>
+        /// <param name="normalizedMotionPath">Normalized full motion path.</param>
+        /// <returns>True if the model references the motion; otherwise false.</returns>
+        private static bool DoesModelReferenceMotion(string model3JsonPath, string normalizedMotionPath)
+        {
+            try
+            {
+                var model3Json = CubismModel3Json.LoadAtPath(model3JsonPath);
+                if (model3Json == null)
+                {
+                    return false;
+                }
+
+                var motions = model3Json.FileReferences.Motions.Motions;
+                if (motions == null)
+                {
+                    return false;
+                }
+
+                var modelDirectory = Path.GetDirectoryName(model3JsonPath);
+                for (var i = 0; i < motions.Length; i++)
+                {
+                    var group = motions[i];
+                    if (group == null)
+                    {
+                        continue;
+                    }
+
+                    for (var j = 0; j < group.Length; j++)
+                    {
+                        var motionFile = group[j].File;
+                        if (string.IsNullOrEmpty(motionFile))
+                        {
+                            continue;
+                        }
+
+                        var referencedMotionPath = Path.GetFullPath(Path.Combine(modelDirectory, motionFile))
+                            .Replace("\\", "/");
+
+                        if (string.Equals(referencedMotionPath, normalizedMotionPath, System.StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fail silently and keep compatibility fallback behavior.
+            }
+
+            return false;
         }
 
         /// <summary>

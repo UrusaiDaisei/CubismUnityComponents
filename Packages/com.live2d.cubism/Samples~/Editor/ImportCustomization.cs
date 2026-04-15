@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright(c) Live2D Inc. All rights reserved.
  *
  * Use of this source code is governed by the Live2D Open Software license
@@ -6,9 +6,8 @@
  */
 
 
-using Live2D.Cubism.Core;
 using Live2D.Cubism.Rendering;
-using Live2D.Cubism.Editor.Importers;
+using Packages.Live2D.Editor.Importers.New;
 using System.Linq;
 using UnityEngine;
 using UnityEditor;
@@ -33,7 +32,7 @@ namespace Live2D.Cubism.Samples.Editor
         // [InitializeOnLoadMethod]
         private static void RegisterModelImporter()
         {
-            CubismImporter.OnDidImportModel += OnModelImport;
+            CubismModel3JsonImporter.OnDidImportModel += OnModelImport;
         }
 
         #endregion
@@ -41,12 +40,14 @@ namespace Live2D.Cubism.Samples.Editor
         #region Cubism Import Event Handling
 
         /// <summary>
-        /// Customizes model importing.
+        /// Customizes model importing. model3.json is imported via ScriptedImporter; this event is still raised with the importer and model.
+        /// For ScriptedImporter-specific context (e.g. AddSubObject), subscribe to CubismModel3JsonImporter.OnDidImportModel(IModelImportContext) instead.
         /// </summary>
-        /// <param name="sender">Event source.</param>
-        /// <param name="model">Imported model.</param>
-        private static void OnModelImport(CubismModel3JsonImporter sender, CubismModel model)
+        /// <param name="ctx">Import context.</param>
+        private static void OnModelImport(IModelImportContext ctx)
         {
+            var model = ctx.Model;
+
             // Lets pretend we want to change the vertex colors of all drawables to green...
             foreach (var renderer in model.Drawables.Select(d => d.GetComponent<CubismRenderer>()))
             {

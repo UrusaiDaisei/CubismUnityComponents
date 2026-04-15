@@ -1,10 +1,7 @@
 using Live2D.Cubism.Core;
-using System.Collections.Generic;
 using Live2D.Cubism.Framework;
-using Live2D.Cubism.Rendering.Masking;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace Live2D.Cubism.Editor
 {
@@ -13,8 +10,6 @@ namespace Live2D.Cubism.Editor
     {
         private static int _lastSelectedInstanceId = 0;
         private static CubismModel _cachedModel;
-        private static CubismMaskController[] _cachedMaskControllers;
-        private static CommandBuffer _sharedCmd;
         private static double _lastRunTime = 0.0;
         private static bool _wasInAnimationMode = false;
 
@@ -63,9 +58,6 @@ namespace Live2D.Cubism.Editor
             {
                 _lastSelectedInstanceId = selected.GetInstanceID();
                 _cachedModel = selected.FindCubismModel(true);
-                _cachedMaskControllers = _cachedModel != null
-                    ? _cachedModel.GetComponentsInChildren<CubismMaskController>(true)
-                    : selected.GetComponentsInChildren<CubismMaskController>(true);
             }
 
             var model = _cachedModel;
@@ -83,7 +75,7 @@ namespace Live2D.Cubism.Editor
                 }
             }
 
-            UpdateModel(model, _cachedMaskControllers);
+            UpdateModel(model);
 
             var activeView = SceneView.lastActiveSceneView;
             if (activeView != null)
@@ -92,7 +84,7 @@ namespace Live2D.Cubism.Editor
                 SceneView.RepaintAll();
         }
 
-        private static void UpdateModel(CubismModel model, CubismMaskController[] maskControllers)
+        private static void UpdateModel(CubismModel model)
         {
             model.ForceUpdateNow();
 
@@ -102,57 +94,11 @@ namespace Live2D.Cubism.Editor
                 updateController.Refresh();
                 updateController.ForceUpdateNow();
             }
-
-            // Ensure clipping masks refresh in edit mode by drawing mask textures directly
-            if (maskControllers != null && maskControllers.Length > 0)
-            {
-                var uniqueTextures = new HashSet<CubismMaskTexture>();
-
-                for (int i = 0; i < maskControllers.Length; i++)
-                {
-                    var maskController = maskControllers[i];
-                    if (maskController == null || !maskController.isActiveAndEnabled)
-                        continue;
-
-                    var maskTexture = maskController.MaskTexture;
-                    if (maskTexture == null)
-                        continue;
-
-                    // Ensure registered once
-                    maskTexture.AddSource(maskController);
-
-                    uniqueTextures.Add(maskTexture);
-                }
-
-                foreach (var maskTexture in uniqueTextures)
-                {
-                    var commandSource = (ICubismMaskCommandSource)maskTexture;
-                    int rtCount = maskTexture.RenderTextureCount;
-                    if (rtCount <= 0)
-                    {
-                        _sharedCmd ??= new CommandBuffer { name = "CubismMaskPreview" };
-                        _sharedCmd.Clear();
-                        commandSource.AddToCommandBuffer(_sharedCmd, false, -1);
-                        Graphics.ExecuteCommandBuffer(_sharedCmd);
-                    }
-                    else
-                    {
-                        for (int bufferIndex = 0; bufferIndex < rtCount; bufferIndex++)
-                        {
-                            _sharedCmd ??= new CommandBuffer { name = "CubismMaskPreview" };
-                            _sharedCmd.Clear();
-                            commandSource.AddToCommandBuffer(_sharedCmd, true, bufferIndex);
-                            Graphics.ExecuteCommandBuffer(_sharedCmd);
-                        }
-                    }
-                }
-            }
         }
 
         private static void OnSelectionChanged()
         {
             _cachedModel = null;
-            _cachedMaskControllers = null;
             _lastSelectedInstanceId = 0;
         }
     }

@@ -41,6 +41,7 @@ Material:
     - _DstAlpha: 10
     - _DstColor: 10
     - _OffscreenOpacity: 1
+    - _ReversedZ: 0
     - _SrcAlpha: 1
     - _SrcColor: 1
     - cubism_InvertOn: 1
