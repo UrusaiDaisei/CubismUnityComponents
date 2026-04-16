@@ -46,6 +46,15 @@ namespace Live2D.Cubism.Rendering.URP.RenderingInterceptor
         }
 
         /// <summary>
+        /// True when at least one interceptor is registered.
+        /// Used to skip per-draw interceptor overhead in the render pass.
+        /// </summary>
+        public bool HasInterceptors
+        {
+            get { return _interceptors != null && _interceptors.Length > 0; }
+        }
+
+        /// <summary>
         /// Private constructor to enforce singleton pattern.
         /// </summary>
         private CubismRenderingInterceptorsManager()
@@ -156,6 +165,11 @@ namespace Live2D.Cubism.Rendering.URP.RenderingInterceptor
         /// <param name="args"> Rendering event arguments. </param>
         public void OnPreRendering(CubismRenderedEventArgs args)
         {
+            if (!HasInterceptors)
+            {
+                return;
+            }
+
             for (var index = 0; index < Interceptors.Length; index++)
             {
                 Interceptors[index].OnPreRenderingForPass(args);
@@ -168,6 +182,11 @@ namespace Live2D.Cubism.Rendering.URP.RenderingInterceptor
         /// <param name="args"> Rendering event arguments. </param>
         public void OnPostRendering(CubismRenderedEventArgs args)
         {
+            if (!HasInterceptors)
+            {
+                return;
+            }
+
             for (var index = 0; index < Interceptors.Length; index++)
             {
                 Interceptors[index].OnPostRenderingForPass(args);

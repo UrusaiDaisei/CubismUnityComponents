@@ -508,10 +508,20 @@ namespace Live2D.Cubism.Rendering.URP
             private static void DrawObjects(CommandBuffer commandBuffer, PassData data)
             {
                 // Clear offscreen render textures at the beginning of the draw call.
-                CubismOffscreenRenderTextureManager.GetInstance().ClearRenderTextures(_commandBuffer);
+                CubismOffscreenRenderTextureManager.GetInstance().ClearRenderTextures(commandBuffer);
 
                 // Check and set skip rendering flags for each renderer.
                 CheckRenderingSkip();
+
+                var interceptorsManager = CubismRenderingInterceptorsManager.GetInstance();
+                var useInterceptors = interceptorsManager.HasInterceptors;
+
+                var copiedToCameraTexture = CubismRenderControllerGroup.GetInstance().IsCopiedToCameraTexture;
+                if (copiedToCameraTexture)
+                {
+                    _blitRenderTextureMaterial.SetTexture(CubismShaderVariables.MainTexture, data.CommonRenderingTextureHandle);
+                    _blitRenderTextureMaterial.SetInt(CubismShaderVariables.ReversedZ, SystemInfo.usesReversedZBuffer ? GEqual : LEqual);
+                }
 
                 for (var groupIndex = 0; groupIndex < _sortedRendererGroupDataArray?.Length; groupIndex++)
                 {
@@ -525,16 +535,19 @@ namespace Live2D.Cubism.Rendering.URP
 #if UNITY_EDITOR
                     // Calculate distance to camera for each renderer for CubismRenderInterceptorsManager events.
                     // HACK: Unity may mix scene camera and game camera information, so recalculate the distance each time in the Editor.
-                    for (var rendererIndex = 0; rendererIndex < rendererGroup.Renderers.Length; rendererIndex++)
+                    if (useInterceptors)
                     {
-                        var target = rendererGroup.Renderers[rendererIndex];
-
-                        if (!target)
+                        for (var rendererIndex = 0; rendererIndex < rendererGroup.Renderers.Length; rendererIndex++)
                         {
-                            continue;
-                        }
+                            var target = rendererGroup.Renderers[rendererIndex];
 
-                        target.CalculateDistanceToCamera(data.CameraData.worldSpaceCameraPos, data.CameraData.camera.transform.forward);
+                            if (!target)
+                            {
+                                continue;
+                            }
+
+                            target.CalculateDistanceToCamera(data.CameraData.worldSpaceCameraPos, data.CameraData.camera.transform.forward);
+                        }
                     }
 #endif
 
@@ -549,38 +562,40 @@ namespace Live2D.Cubism.Rendering.URP
                             continue;
                         }
 
-                        var previousRenderer = rendererIndex > 0
-                            ? rendererGroup.Renderers[rendererIndex - 1]
-                            : null;
-                        var nextRenderer = rendererIndex < rendererGroup.Renderers.Length - 1
-                            ? rendererGroup.Renderers[rendererIndex + 1]
-                            : null;
-
-                        var args = new CubismRenderedEventArgs()
+                        if (useInterceptors)
                         {
-                            PassData = data,
-                            CommandBuffer = commandBuffer,
-                            ColorBuffer = renderer.RenderController.CurrentFrameBuffer,
-                            DepthBuffer = data.CameraDepthTextureHandle,
-                            SortingOrder = renderer.MeshRenderer.sortingOrder,
-                            Drawable = renderer.Drawable,
-                            SortingMode = renderer.RenderController.SortingMode,
-                            GroupSortingOrder = rendererGroup.SortingIndex,
-                            Distance = renderer.DistanceToCamera,
-                            NextDistance = nextRenderer != null ? nextRenderer.DistanceToCamera : null,
-                            PreviousDistance = previousRenderer != null ? previousRenderer.DistanceToCamera : null,
-                            CameraPos = data.CameraData.worldSpaceCameraPos,
-                            CameraForward = data.CameraData.camera.transform.forward
-                        };
+                            var previousRenderer = rendererIndex > 0
+                                ? rendererGroup.Renderers[rendererIndex - 1]
+                                : null;
+                            var nextRenderer = rendererIndex < rendererGroup.Renderers.Length - 1
+                                ? rendererGroup.Renderers[rendererIndex + 1]
+                                : null;
 
-                        // Pre-rendering event.
-                        CubismRenderingInterceptorsManager.GetInstance().OnPreRendering(args);
+                            var args = new CubismRenderedEventArgs()
+                            {
+                                PassData = data,
+                                CommandBuffer = commandBuffer,
+                                ColorBuffer = renderer.RenderController.CurrentFrameBuffer,
+                                DepthBuffer = data.CameraDepthTextureHandle,
+                                SortingOrder = renderer.MeshRenderer.sortingOrder,
+                                Drawable = renderer.Drawable,
+                                SortingMode = renderer.RenderController.SortingMode,
+                                GroupSortingOrder = rendererGroup.SortingIndex,
+                                Distance = renderer.DistanceToCamera,
+                                NextDistance = nextRenderer != null ? nextRenderer.DistanceToCamera : null,
+                                PreviousDistance = previousRenderer != null ? previousRenderer.DistanceToCamera : null,
+                                CameraPos = data.CameraData.worldSpaceCameraPos,
+                                CameraForward = data.CameraData.camera.transform.forward
+                            };
 
-                        // Draw the object.
-                        renderer.DrawObject(commandBuffer, data);
-
-                        // Post-rendering event.
-                        CubismRenderingInterceptorsManager.GetInstance().OnPostRendering(args);
+                            interceptorsManager.OnPreRendering(args);
+                            renderer.DrawObject(commandBuffer, data);
+                            interceptorsManager.OnPostRendering(args);
+                        }
+                        else
+                        {
+                            renderer.DrawObject(commandBuffer, data);
+                        }
 
                         if (renderer.IsLastDrawObjectInModel)
                         {
@@ -589,23 +604,14 @@ namespace Live2D.Cubism.Rendering.URP
                     }
 
                     // Blit the result back to the camera texture if needed.
-                    if (CubismRenderControllerGroup.GetInstance().IsCopiedToCameraTexture)
+                    if (copiedToCameraTexture)
                     {
-                        _commandBuffer.SetRenderTarget(data.CameraTextureHandle, data.CameraDepthTextureHandle);
-
-                        // Draw the full-screen quad to blit the common rendering texture to the camera texture.
-                        _blitRenderTextureMaterial.SetTexture(CubismShaderVariables.MainTexture, data.CommonRenderingTextureHandle);
-
-                        // Check for reversed Z buffer.
-                        var reversedZ = SystemInfo.usesReversedZBuffer ? GEqual : LEqual;
-                        _blitRenderTextureMaterial.SetInt(CubismShaderVariables.ReversedZ, reversedZ);
-
-                        // Draw the full-screen quad.
-                        _commandBuffer.DrawMesh(_blitRenderTextureMesh, Matrix4x4.identity, _blitRenderTextureMaterial);
+                        commandBuffer.SetRenderTarget(data.CameraTextureHandle, data.CameraDepthTextureHandle);
+                        commandBuffer.DrawMesh(_blitRenderTextureMesh, Matrix4x4.identity, _blitRenderTextureMaterial);
 
                         // Clear the common rendering texture for the next group.
-                        _commandBuffer.SetRenderTarget(data.CommonRenderingTextureHandle);
-                        _commandBuffer.ClearRenderTarget(true, true, Color.clear);
+                        commandBuffer.SetRenderTarget(data.CommonRenderingTextureHandle);
+                        commandBuffer.ClearRenderTarget(true, true, Color.clear);
                     }
                 }
 
@@ -683,16 +689,11 @@ namespace Live2D.Cubism.Rendering.URP
                 // Blit the result back to the camera texture.
                 if (!CubismRenderControllerGroup.GetInstance().IsCopiedToCameraTexture)
                 {
-                    _commandBuffer.SetRenderTarget(data.CameraTextureHandle, data.CameraDepthTextureHandle);
-
-                    // Draw the full-screen quad to blit the common rendering texture to the camera texture.
+                    var reversedZDepthTest = SystemInfo.usesReversedZBuffer ? GEqual : LEqual;
                     _blitRenderTextureMaterial.SetTexture(CubismShaderVariables.MainTexture, data.CommonRenderingTextureHandle);
+                    _blitRenderTextureMaterial.SetInt(CubismShaderVariables.ReversedZ, reversedZDepthTest);
 
-                    // Check for reversed Z buffer.
-                    var reversedZ = SystemInfo.usesReversedZBuffer? GEqual : LEqual;
-                    _blitRenderTextureMaterial.SetInt(CubismShaderVariables.ReversedZ, reversedZ);
-
-                    // Draw the full-screen quad.
+                    _commandBuffer.SetRenderTarget(data.CameraTextureHandle, data.CameraDepthTextureHandle);
                     _commandBuffer.DrawMesh(_blitRenderTextureMesh, Matrix4x4.identity, _blitRenderTextureMaterial);
                 }
 

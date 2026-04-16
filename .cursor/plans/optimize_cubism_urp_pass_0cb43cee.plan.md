@@ -4,10 +4,10 @@ overview: Create a staged, low-risk optimization plan for the custom Cubism URP 
 todos:
   - id: roi-1-interceptor-fastpath
     content: Add no-interceptor fast path in draw loop to skip event arg construction and pre/post dispatch when no interceptors are registered.
-    status: pending
+    status: completed
   - id: roi-2-command-state-hygiene
     content: Standardize command buffer usage and remove redundant state changes in hot path without changing draw order.
-    status: pending
+    status: completed
   - id: roi-3-controller-frustum-gate
     content: Add controller-level frustum culling before sort/draw work and skip fully out-of-frustum controllers.
     status: pending
