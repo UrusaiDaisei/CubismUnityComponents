@@ -10,7 +10,7 @@ todos:
     status: completed
   - id: roi-3-controller-frustum-gate
     content: Add controller-level frustum culling before sort/draw work and skip fully out-of-frustum controllers.
-    status: pending
+    status: completed
   - id: roi-4-dirty-sort-skip-gate
     content: Gate expensive sort/skip recomputation behind dirty conditions and camera-movement thresholds for depth sort.
     status: pending
@@ -42,6 +42,23 @@ isProject: false
 ---
 
 # Cubism URP Optimization Plan
+
+## Current Progress Snapshot
+- Completed in `CubismRenderPassFeatureOptimized`:
+  - interceptor no-op fast path (skip event args and pre/post dispatch when no interceptors)
+  - command/state hygiene updates in draw path
+  - controller-level frustum visibility gate
+  - drawable frustum reuse via per-frame visible-renderer hash set (no duplicated `TestPlanesAABB`)
+  - partial dirty-gated group refresh (skip full group rebuild when ordering/camera state did not change)
+  - per-frame allocation reductions in sorting/group cache flow:
+    - reusable scratch buffers for visible controllers
+    - controller-group cache as capacity buffer plus active-count window
+    - `ReadOnlySpan<CubismRenderController>` active slices for hot loops
+  - destroyed-reference safety guards for cached controllers in setup and skip-check loops
+- Still pending:
+  - full ROI-4 dirty gating (including broader sort/skip recomputation strategy and thresholded camera gating policy)
+  - Phase 1 validation pass (metrics + scene verification)
+  - Phase 2 mask pre-pass/channel packing/caching implementation and validation
 
 ## Goals
 - Reduce draw batches and frame time in `CubismRenderPassFeatureOptimized` without regressions in ordering, masking, or offscreen composition.
@@ -86,6 +103,10 @@ isProject: false
     - drawable render order changed
     - sorting mode/order changed
     - camera moved/rotated beyond threshold (depth-sort mode only)
+  - Current status:
+    - partially implemented for renderer-group refresh/rebuild
+    - full recomputation gating policy is still pending
+    - camera movement currently uses exact position/rotation change; threshold-based gating remains pending
   - Keep fallback to full recompute behind debug toggle.
 - **1.4 Command/state hygiene**
   - Standardize command buffer usage inside `DrawObjects`.

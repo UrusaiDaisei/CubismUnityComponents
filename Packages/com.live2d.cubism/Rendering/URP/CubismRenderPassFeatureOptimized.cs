@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Live2D.Cubism.Core;
 using Live2D.Cubism.Rendering.URP.RenderingInterceptor;
 using UnityEngine;
@@ -46,6 +48,11 @@ namespace Live2D.Cubism.Rendering.URP
                 public CubismRenderController[] RenderControllers;
 
                 /// <summary>
+                /// Number of active render controllers in <see cref="RenderControllers"/>.
+                /// </summary>
+                public int ActiveRenderControllerCount;
+
+                /// <summary>
                 /// Array of renderers in this group.
                 /// </summary>
                 public CubismRenderer[] Renderers;
@@ -70,6 +77,36 @@ namespace Live2D.Cubism.Rendering.URP
             /// Material used for blitting render textures.
             /// </summary>
             private static Material _blitRenderTextureMaterial;
+
+            /// <summary>
+            /// Last camera position used for frustum culling.
+            /// </summary>
+            private static Vector3 _lastCullingCameraPosition;
+
+            /// <summary>
+            /// Last camera rotation used for frustum culling.
+            /// </summary>
+            private static Quaternion _lastCullingCameraRotation;
+
+            /// <summary>
+            /// Whether culling camera state has been initialized.
+            /// </summary>
+            private static bool _hasCullingCameraState;
+
+            /// <summary>
+            /// Drawables whose bounds intersect the culling camera frustum this frame (filled during sorting).
+            /// </summary>
+            private static HashSet<CubismRenderer> _frustumVisibleRenderers;
+
+            /// <summary>
+            /// Scratch buffer reused while collecting visible controllers in a sorting group.
+            /// </summary>
+            private static CubismRenderController[] _visibleControllersScratch;
+
+            /// <summary>
+            /// When true, <see cref="CheckRenderingSkip"/> uses <see cref="_frustumVisibleRenderers"/> instead of recomputing frustum tests.
+            /// </summary>
+            private static bool _useFrustumVisibleRenderersSet;
 
             /// <summary>
             /// This class stores the data needed by the RenderGraph pass.
@@ -128,22 +165,22 @@ namespace Live2D.Cubism.Rendering.URP
             /// </summary>
             /// <param name="targetIndex">Target index in the sorted renderer groups array.</param>
             /// <param name="target">Added target renderer group.</param>
-            /// <param name="source">Source render controller group.</param>
+            /// <param name="activeControllers">Active render controllers for this group.</param>
             /// <param name="cameraPos">Position of the camera</param>
             /// <param name="data">Pass data containing render controller groups and camera data</param>
-            private static void SetUpRendererGroup(int targetIndex, RendererGroupData target, CubismRenderControllerGroup.RenderControllerGroupData source, Vector3 cameraPos, PassData data)
+            private static void SetUpRendererGroup(int targetIndex, RendererGroupData target, ReadOnlySpan<CubismRenderController> activeControllers, Vector3 cameraPos, PassData data)
             {
                 var previousCount = 0;
-                for (var renderControllerIndex = 0; renderControllerIndex < source.Controllers.Length; renderControllerIndex++)
+                for (var renderControllerIndex = 0; renderControllerIndex < activeControllers.Length; renderControllerIndex++)
                 {
-                    var controller = source.Controllers[renderControllerIndex];
-
-                    controller.CurrentFrameBuffer = data.CommonRenderingTextureHandle;
+                    var controller = activeControllers[renderControllerIndex];
 
                     if (!controller || controller.Renderers == null)
                     {
                         continue;
                     }
+
+                    controller.CurrentFrameBuffer = data.CommonRenderingTextureHandle;
 
                     // Copy the renderers from the controller to the sorted array.
                     for (var rendererIndex = 0; rendererIndex < controller.Renderers.Length; rendererIndex++)
@@ -164,6 +201,211 @@ namespace Live2D.Cubism.Rendering.URP
             }
 
             /// <summary>
+            /// Ensures the temporary visible controller buffer can hold the requested count.
+            /// </summary>
+            /// <param name="requiredLength">Minimum required length.</param>
+            private static void EnsureVisibleControllersScratchCapacity(int requiredLength)
+            {
+                if (_visibleControllersScratch != null
+                    && _visibleControllersScratch.Length >= requiredLength)
+                {
+                    return;
+                }
+
+                _visibleControllersScratch = new CubismRenderController[GetExpandedCapacity(requiredLength)];
+            }
+
+            /// <summary>
+            /// Returns a power-of-two capacity that can contain the required element count.
+            /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private static int GetExpandedCapacity(int requiredLength)
+            {
+                return Mathf.NextPowerOfTwo(Mathf.Max(1, requiredLength));
+            }
+
+            /// <summary>
+            /// Resets renderer-group cache when it is invalid for the current number of groups.
+            /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private static void EnsureRendererGroupCacheInitialized(int currentGroupCount)
+            {
+                if (_sortedRendererGroupDataArray == null
+                    || _sortedRendererGroupDataArray.Length > currentGroupCount)
+                {
+                    _sortedRendererGroupDataArray = Array.Empty<RendererGroupData>();
+                }
+            }
+
+            /// <summary>
+            /// Ensures renderer buffer size matches this group's renderer count.
+            /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private static void EnsureRendererBufferSize(ref RendererGroupData target, int rendererCount)
+            {
+                if (target.Renderers.Length == rendererCount)
+                {
+                    return;
+                }
+
+                Array.Resize(ref target.Renderers, rendererCount);
+            }
+
+            /// <summary>
+            /// Ensures controller buffer has enough capacity.
+            /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private static void EnsureControllerBufferCapacity(ref RendererGroupData target, int requiredControllerCapacity)
+            {
+                if (target.RenderControllers != null
+                    && target.RenderControllers.Length >= requiredControllerCapacity)
+                {
+                    return;
+                }
+
+                target.RenderControllers = new CubismRenderController[GetExpandedCapacity(requiredControllerCapacity)];
+            }
+
+            /// <summary>
+            /// Copies visible controllers into the target scratch buffer and updates active count.
+            /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private static void CopyVisibleControllersToTarget(ref RendererGroupData target, int visibleControllerCount)
+            {
+                Array.Copy(_visibleControllersScratch, target.RenderControllers, visibleControllerCount);
+                target.ActiveRenderControllerCount = visibleControllerCount;
+            }
+
+            /// <summary>
+            /// Returns the active controller span from the group's scratch controller buffer.
+            /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private static ReadOnlySpan<CubismRenderController> GetActiveControllers(in RendererGroupData target)
+            {
+                return target.RenderControllers.AsSpan(0, target.ActiveRenderControllerCount);
+            }
+
+            /// <summary>
+            /// Finds an existing cached group, refreshes its buffers, and repopulates sorted data.
+            /// </summary>
+            private static bool TryRefreshExistingRendererGroup(PassData data, CubismRenderControllerGroup.RenderControllerGroupData group, int visibleControllerCount, int rendererCount)
+            {
+                for (var targetIndex = 0; targetIndex < _sortedRendererGroupDataArray.Length; targetIndex++)
+                {
+                    var target = _sortedRendererGroupDataArray[targetIndex];
+
+                    if (target.Renderers == null
+                        || target.SortingIndex != group.SortingGroupIndex)
+                    {
+                        continue;
+                    }
+
+                    EnsureRendererBufferSize(ref target, rendererCount);
+
+                    var requiredControllerCapacity = Mathf.Max(group.Controllers.Length, visibleControllerCount);
+                    EnsureControllerBufferCapacity(ref target, requiredControllerCapacity);
+                    CopyVisibleControllersToTarget(ref target, visibleControllerCount);
+
+                    SetUpRendererGroup(targetIndex, target, GetActiveControllers(target), data.CameraData.worldSpaceCameraPos, data);
+                    return true;
+                }
+
+                return false;
+            }
+
+            /// <summary>
+            /// Creates and appends a new cached renderer group.
+            /// </summary>
+            private static void CreateAndAppendRendererGroup(PassData data, CubismRenderControllerGroup.RenderControllerGroupData group, int visibleControllerCount, int rendererCount)
+            {
+                Array.Resize(ref _sortedRendererGroupDataArray, _sortedRendererGroupDataArray.Length + 1);
+
+                var newRendererGroup = new RendererGroupData
+                {
+                    SortingIndex = group.SortingGroupIndex,
+                    RenderControllers = new CubismRenderController[GetExpandedCapacity(Mathf.Max(group.Controllers.Length, visibleControllerCount))],
+                    ActiveRenderControllerCount = 0,
+                    Renderers = new CubismRenderer[rendererCount]
+                };
+
+                CopyVisibleControllersToTarget(ref newRendererGroup, visibleControllerCount);
+                SetUpRendererGroup(_sortedRendererGroupDataArray.Length - 1, newRendererGroup, GetActiveControllers(newRendererGroup), data.CameraData.worldSpaceCameraPos, data);
+            }
+
+            /// <summary>
+            /// Appends renderers whose bounds intersect the frustum to the set, and reports whether the controller should be treated as visible.
+            /// </summary>
+            /// <param name="controller">Controller to evaluate.</param>
+            /// <param name="frustumPlanes">Camera frustum planes, or an empty span to skip frustum tests.</param>
+            /// <param name="frustumVisibleRenderers">Receives every in-frustum renderer for this controller.</param>
+            /// <returns>False if the controller has no valid renderers; when <paramref name="frustumPlanes"/> is empty, true if the controller is usable; otherwise true if any renderer intersects the frustum.</returns>
+            private static bool TryAppendFrustumVisibleRenderers(CubismRenderController controller, ReadOnlySpan<Plane> frustumPlanes, HashSet<CubismRenderer> frustumVisibleRenderers)
+            {
+                if (!controller
+                    || controller.Renderers == null)
+                {
+                    return false;
+                }
+
+                if (frustumPlanes.Length == 0)
+                {
+                    return true;
+                }
+
+                var anyInFrustum = false;
+
+                for (var rendererIndex = 0; rendererIndex < controller.Renderers.Length; rendererIndex++)
+                {
+                    var renderer = controller.Renderers[rendererIndex];
+
+                    if (!renderer
+                        || !renderer.MeshRenderer
+                        || !renderer.MeshRenderer.enabled
+                        || !renderer.gameObject.activeInHierarchy)
+                    {
+                        continue;
+                    }
+
+                    if (GeometryUtility.TestPlanesAABB(frustumPlanes, renderer.MeshRenderer.bounds))
+                    {
+                        frustumVisibleRenderers.Add(renderer);
+                        anyInFrustum = true;
+                    }
+                }
+
+                return anyInFrustum;
+            }
+
+            /// <summary>
+            /// Clears cached renderer group data for the given sorting index.
+            /// This prevents stale groups from being drawn when they become fully culled.
+            /// </summary>
+            /// <param name="sortingIndex">Sorting index to clear.</param>
+            private static void ClearCachedRendererGroup(int sortingIndex)
+            {
+                if (_sortedRendererGroupDataArray == null)
+                {
+                    return;
+                }
+
+                for (var targetIndex = 0; targetIndex < _sortedRendererGroupDataArray.Length; targetIndex++)
+                {
+                    var target = _sortedRendererGroupDataArray[targetIndex];
+
+                    if (target.SortingIndex != sortingIndex)
+                    {
+                        continue;
+                    }
+
+                    target.RenderControllers = Array.Empty<CubismRenderController>();
+                    target.ActiveRenderControllerCount = 0;
+                    target.Renderers = Array.Empty<CubismRenderer>();
+                    _sortedRendererGroupDataArray[targetIndex] = target;
+                    break;
+                }
+            }
+
+            /// <summary>
             /// Sorts the renderer groups based on their sorting order.
             /// </summary>
             /// <param name="data">Pass data containing render controller groups.</param>
@@ -173,7 +415,37 @@ namespace Live2D.Cubism.Rendering.URP
                 if (data.RenderControllerGroupDaraArray == null
                     || data.RenderControllerGroupDaraArray.Length < 1)
                 {
+                    _useFrustumVisibleRenderersSet = false;
+                    _frustumVisibleRenderers?.Clear();
+
                     return;
+                }
+
+                var camera = data.CameraData.camera;
+                Span<Plane> frustumPlanesStack = stackalloc Plane[6];
+                var frustumPlanes = frustumPlanesStack;
+                var didCullingCameraChange = false;
+
+                if (camera != null)
+                {
+                    GeometryUtility.CalculateFrustumPlanes(camera, frustumPlanes);
+                    didCullingCameraChange = !_hasCullingCameraState
+                        || _lastCullingCameraPosition != camera.transform.position
+                        || _lastCullingCameraRotation != camera.transform.rotation;
+
+                    _lastCullingCameraPosition = camera.transform.position;
+                    _lastCullingCameraRotation = camera.transform.rotation;
+                    _hasCullingCameraState = true;
+
+                    _frustumVisibleRenderers ??= new HashSet<CubismRenderer>(256);
+                    _frustumVisibleRenderers.Clear();
+                    _useFrustumVisibleRenderersSet = true;
+                }
+                else
+                {
+                    frustumPlanes = Span<Plane>.Empty;
+                    _useFrustumVisibleRenderersSet = false;
+                    _frustumVisibleRenderers?.Clear();
                 }
 
                 // Iterate through each render controller group.
@@ -181,7 +453,9 @@ namespace Live2D.Cubism.Rendering.URP
                 {
                     var group = data.RenderControllerGroupDaraArray[groupsIndex];
                     var rendererCount = 0;
-                    var didChangeSortingOrder = false;
+                    var didChangeSortingOrder = didCullingCameraChange;
+                    EnsureVisibleControllersScratchCapacity(group.Controllers.Length);
+                    var visibleControllerCount = 0;
 
                     for (var i = 0; i < group.Controllers.Length; i++)
                     {
@@ -192,6 +466,15 @@ namespace Live2D.Cubism.Rendering.URP
                         {
                             continue;
                         }
+
+                        // Skip controllers that are fully outside the camera frustum.
+                        if (!TryAppendFrustumVisibleRenderers(controller, frustumPlanes, _frustumVisibleRenderers))
+                        {
+                            continue;
+                        }
+
+                        _visibleControllersScratch[visibleControllerCount] = controller;
+                        visibleControllerCount++;
 
                         // Update sorting state from camera position.
                         controller.UpdateDidChangeSortingFromZ(data.CameraData.worldSpaceCameraPos);
@@ -215,79 +498,27 @@ namespace Live2D.Cubism.Rendering.URP
                         rendererCount += controller.Renderers.Length;
                     }
 
+                    if (visibleControllerCount < 1)
+                    {
+                        // If this group was previously cached, clear it to avoid stale draw calls.
+                        ClearCachedRendererGroup(group.SortingGroupIndex);
+                        continue;
+                    }
+
                     // If nothing changed, no need to sort again.
                     if (!didChangeSortingOrder)
                     {
                         continue;
                     }
 
-                    // Create an empty array if it doesn't exist or its size doesn't match the number of groups.
-                    if (_sortedRendererGroupDataArray == null
-                        || _sortedRendererGroupDataArray.Length > data.RenderControllerGroupDaraArray.Length)
-                    {
-                        _sortedRendererGroupDataArray = Array.Empty<RendererGroupData>();
-                    }
+                    EnsureRendererGroupCacheInitialized(data.RenderControllerGroupDaraArray.Length);
 
-                    var hasGroupFound = false;
-                    for (var targetIndex = 0; targetIndex < _sortedRendererGroupDataArray.Length; targetIndex++)
-                    {
-                        var target = _sortedRendererGroupDataArray[targetIndex];
-
-                        if (target.Renderers == null
-                            || target.SortingIndex != group.SortingGroupIndex)
-                        {
-                            continue;
-                        }
-
-                        if (target.Renderers.Length != rendererCount)
-                        {
-                            // Resize the renderers array to fit all renderers in the group.
-                            Array.Resize(ref target.Renderers, rendererCount);
-                        }
-
-                        var hasControllersNull = false;
-                        for (var controllerIndex = 0; controllerIndex < target.RenderControllers.Length; controllerIndex++)
-                        {
-                            if (target.RenderControllers[controllerIndex])
-                            {
-                                continue;
-                            }
-
-                            hasControllersNull = true;
-                            break;
-                        }
-
-                        if (hasControllersNull
-                            || didChangeSortingRenderControllerGroup
-                            || target.RenderControllers.Length != data.RenderControllerGroupDaraArray[groupsIndex].Controllers.Length)
-                        {
-                            target.RenderControllers = data.RenderControllerGroupDaraArray[groupsIndex].Controllers;
-                        }
-
-                        // Set up and fill the renderer group.
-                        SetUpRendererGroup(targetIndex, target, group, data.CameraData.worldSpaceCameraPos, data);
-
-                        hasGroupFound = true;
-                        break;
-                    }
-
-                    // Initialize the renderer group if necessary
-                    if (hasGroupFound)
+                    if (TryRefreshExistingRendererGroup(data, group, visibleControllerCount, rendererCount))
                     {
                         continue;
                     }
 
-                    // Resize the sorted renderer groups array to add a new group.
-                    Array.Resize(ref _sortedRendererGroupDataArray, _sortedRendererGroupDataArray.Length + 1);
-                    var newRendererGroup = new RendererGroupData
-                    {
-                        SortingIndex = group.SortingGroupIndex,
-                        RenderControllers = data.RenderControllerGroupDaraArray[groupsIndex].Controllers,
-                        Renderers = new CubismRenderer[rendererCount]
-                    };
-
-                    // Set up and fill the renderer group.
-                    SetUpRendererGroup(_sortedRendererGroupDataArray.Length - 1, newRendererGroup, group, data.CameraData.worldSpaceCameraPos,data);
+                    CreateAndAppendRendererGroup(data, group, visibleControllerCount, rendererCount);
                 }
             }
 
@@ -343,6 +574,7 @@ namespace Live2D.Cubism.Rendering.URP
 
             /// <summary>
             /// Checks and sets the skip rendering flag for each renderer.
+            /// Drawable frustum culling uses <see cref="_frustumVisibleRenderers"/> populated during <see cref="SortingRendererGroups"/>.
             /// </summary>
             private static void CheckRenderingSkip()
             {
@@ -383,8 +615,19 @@ namespace Live2D.Cubism.Rendering.URP
                         {
                             case CubismModelTypes.DrawObjectType.Drawable:
                                 renderer.SkipRendering |= renderer.Opacity <= 0.0f;
+
+                                // Per-drawable frustum culling: reuse bounds tests from sorting (see TryAppendFrustumVisibleRenderers).
+                                if (!renderer.SkipRendering
+                                    && _useFrustumVisibleRenderersSet)
+                                {
+                                    renderer.SkipRendering |= !_frustumVisibleRenderers.Contains(renderer);
+                                }
                                 break;
                             case CubismModelTypes.DrawObjectType.Offscreen:
+                                // NOTE:
+                                // We intentionally do not frustum-cull offscreen renderers for now.
+                                // Offscreen compositing has dependency/order constraints, and aggressive culling
+                                // here can break masking/composition in edge cases.
                                 renderer.SkipRendering |= renderer.Offscreen.Opacity <= 0.0f;
 
                                 if (!renderer.SkipRendering)
@@ -469,9 +712,10 @@ namespace Live2D.Cubism.Rendering.URP
                         targetRenderer.IsLastDrawObjectInModel = false;
                     }
 
-                    for (var controllerIndex = 0; controllerIndex < target.RenderControllers.Length; controllerIndex++)
+                    var activeControllers = GetActiveControllers(target);
+                    for (var controllerIndex = 0; controllerIndex < activeControllers.Length; controllerIndex++)
                     {
-                        var controller = target.RenderControllers[controllerIndex];
+                        var controller = activeControllers[controllerIndex];
 
                         if (!controller
                             || !controller.enabled
@@ -763,7 +1007,7 @@ namespace Live2D.Cubism.Rendering.URP
                     builder.UseTexture(passData.CameraDepthTextureHandle);
 
                     // Assigns the ExecutePass function to the render pass delegate. This will be called by the render graph when executing the pass.
-                    builder.SetRenderFunc((PassData data, UnsafeGraphContext context) => ExecutePass(data, context));
+                    builder.SetRenderFunc<PassData>(ExecutePass);
                 }
             }
         }
