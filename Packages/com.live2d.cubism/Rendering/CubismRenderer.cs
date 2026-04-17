@@ -10,6 +10,7 @@ using Live2D.Cubism.Core;
 using Live2D.Cubism.Framework.Json;
 using Live2D.Cubism.Rendering.Util;
 using System;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Serialization;
@@ -23,6 +24,44 @@ namespace Live2D.Cubism.Rendering
     [ExecuteInEditMode, RequireComponent(typeof(MeshRenderer))]
     public sealed partial class CubismRenderer : MonoBehaviour
     {
+        [Flags]
+        private enum DrawablePropertyDirtyFlags : byte{
+            None            = 0,
+            MainTexture     = 1,
+            ScreenColor     = 1 << 1,
+            MultiplyColor   = 1 << 2,
+            RenderTexture   = 1 << 3,
+            Transforms      = 1 << 4,
+            All = MainTexture | ScreenColor | MultiplyColor | RenderTexture | Transforms
+        }
+
+        private DrawablePropertyDirtyFlags _propertyBlockDirtyFlags = DrawablePropertyDirtyFlags.All;
+        private bool _vertexColorsIsDirty;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void MarkDirty(DrawablePropertyDirtyFlags flags)
+        {
+            _propertyBlockDirtyFlags |= flags;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool IsDirty(DrawablePropertyDirtyFlags flags)
+        {
+            return (_propertyBlockDirtyFlags & flags) != DrawablePropertyDirtyFlags.None;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool AnyDirty()
+        {
+            return _propertyBlockDirtyFlags != DrawablePropertyDirtyFlags.None;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ClearDirty()
+        {
+            _propertyBlockDirtyFlags = DrawablePropertyDirtyFlags.None;
+        }
+
         /// <summary>
         /// <see cref="LocalSortingOrder"/> backing field.
         /// </summary>
@@ -77,12 +116,9 @@ namespace Live2D.Cubism.Rendering
                     return;
                 }
 
-
                 // Store value.
                 _color = value;
-
-                // Apply color.
-                ApplyVertexColors();
+                _vertexColorsIsDirty = true;
             }
         }
 
@@ -170,6 +206,8 @@ namespace Live2D.Cubism.Rendering
                 _multiplyColor = (value != null)
                     ? value
                     : Color.white;
+
+                MarkDirty(DrawablePropertyDirtyFlags.MultiplyColor);
             }
         }
 
@@ -216,11 +254,12 @@ namespace Live2D.Cubism.Rendering
                     return;
                 }
 
-
                 // Store value.
                 _screenColor = (value != null)
                     ? value
                     : Color.black;
+
+                MarkDirty(DrawablePropertyDirtyFlags.ScreenColor);
             }
         }
 
@@ -315,9 +354,7 @@ namespace Live2D.Cubism.Rendering
                         : Texture2D.whiteTexture;
                 }
 
-
-                // Apply it.
-                ApplyMainTexture();
+                MarkDirty(DrawablePropertyDirtyFlags.MainTexture);
             }
         }
 
@@ -520,7 +557,16 @@ namespace Live2D.Cubism.Rendering
         internal float Opacity
         {
             get { return _opacity; }
-            set { _opacity = value; }
+            set { 
+
+                if(Mathf.Approximately(value, _opacity))
+                {
+                    return;
+                }
+
+                _opacity = value;
+                _vertexColorsIsDirty = true;
+            }
         }
 
 
@@ -731,20 +777,6 @@ namespace Live2D.Cubism.Rendering
         #endregion
 
         /// <summary>
-        /// Applies main texture for rendering.
-        /// </summary>
-        private void ApplyMainTexture()
-        {
-            var property = PropertyBlock;
-            MeshRenderer.GetPropertyBlock(property);
-
-            // Write property.
-            property.SetTexture(CubismShaderVariables.MainTexture, MainTexture);
-
-            MeshRenderer.SetPropertyBlock(property);
-        }
-
-        /// <summary>
         /// Applies sorting.
         /// </summary>
         private void ApplySorting()
@@ -787,23 +819,12 @@ namespace Live2D.Cubism.Rendering
         /// <summary>
         /// Uploads mesh vertex colors.
         /// </summary>
-        public void ApplyVertexColors()
+        private void ApplyVertexColors()
         {
-
-
-            var vertexColors = VertexColors;
             var color = Color;
-
-
             color.a *= Opacity;
-
-
-            for (var i = 0; i < vertexColors.Length; ++i)
-            {
-                vertexColors[i] = color;
-            }
-
-
+            VertexColors.AsSpan().Fill(color);
+            
             // Set swap flag.
             SetNewVertexColors();
         }
@@ -1019,7 +1040,7 @@ namespace Live2D.Cubism.Rendering
             // Set MainTexture for alpha test in picking shader.
             if (MainTexture != null)
             {
-                ApplyMainTexture();
+                MarkDirty(DrawablePropertyDirtyFlags.MainTexture);
             }
         }
 
@@ -1133,9 +1154,6 @@ namespace Live2D.Cubism.Rendering
             {
                 MainTexture = Texture2D.whiteTexture;
             }
-
-
-            ApplyMainTexture();
         }
 
         /// <summary>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Live2D.Cubism.Core;
+using Live2D.Cubism.Rendering;
 using Live2D.Cubism.Rendering.URP.RenderingInterceptor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -850,11 +851,15 @@ namespace Live2D.Cubism.Rendering.URP
                     // Blit the result back to the camera texture if needed.
                     if (copiedToCameraTexture)
                     {
+                        CubismRenderDiagnostics.CountRenderTargetBind();
                         commandBuffer.SetRenderTarget(data.CameraTextureHandle, data.CameraDepthTextureHandle);
+                        CubismRenderDiagnostics.CountDrawSubmission();
                         commandBuffer.DrawMesh(_blitRenderTextureMesh, Matrix4x4.identity, _blitRenderTextureMaterial);
 
                         // Clear the common rendering texture for the next group.
+                        CubismRenderDiagnostics.CountRenderTargetBind();
                         commandBuffer.SetRenderTarget(data.CommonRenderingTextureHandle);
+                        CubismRenderDiagnostics.CountClearRenderTarget();
                         commandBuffer.ClearRenderTarget(true, true, Color.clear);
                     }
                 }
@@ -870,6 +875,7 @@ namespace Live2D.Cubism.Rendering.URP
 
                     controller.DidChangeSorting = false;
                     controller.DidChangeDrawableRenderOrder = false;
+                    controller.transform.hasChanged = false;
                 }
 
                 CubismRenderControllerGroup.GetInstance().DidChangeSortingRenderControllerGroup = false;
@@ -916,6 +922,7 @@ namespace Live2D.Cubism.Rendering.URP
                 // HACK: In the editor, Scene view camera may not have the latest texture data.
                 if (data.CameraData.isSceneViewCamera)
                 {
+                    CubismRenderDiagnostics.CountBlit();
                     _commandBuffer.Blit(data.CameraTextureHandle, data.CommonRenderingTextureHandle);
                 }
 #endif
@@ -924,7 +931,9 @@ namespace Live2D.Cubism.Rendering.URP
                 SortingRendererGroups(data);
 
                 // Set render target with both color and depth buffers for proper depth testing
+                CubismRenderDiagnostics.CountRenderTargetBind();
                 _commandBuffer.SetRenderTarget(data.CommonRenderingTextureHandle, data.CameraDepthTextureHandle);
+                CubismRenderDiagnostics.CountClearRenderTarget();
                 _commandBuffer.ClearRenderTarget(false, true, Color.clear);
 
                 // Draw the objects.
@@ -937,12 +946,16 @@ namespace Live2D.Cubism.Rendering.URP
                     _blitRenderTextureMaterial.SetTexture(CubismShaderVariables.MainTexture, data.CommonRenderingTextureHandle);
                     _blitRenderTextureMaterial.SetInt(CubismShaderVariables.ReversedZ, reversedZDepthTest);
 
+                    CubismRenderDiagnostics.CountRenderTargetBind();
                     _commandBuffer.SetRenderTarget(data.CameraTextureHandle, data.CameraDepthTextureHandle);
+                    CubismRenderDiagnostics.CountDrawSubmission();
                     _commandBuffer.DrawMesh(_blitRenderTextureMesh, Matrix4x4.identity, _blitRenderTextureMaterial);
                 }
 
                 // Clear the common rendering texture for the next frame.
+                CubismRenderDiagnostics.CountRenderTargetBind();
                 _commandBuffer.SetRenderTarget(data.CommonRenderingTextureHandle);
+                CubismRenderDiagnostics.CountClearRenderTarget();
                 _commandBuffer.ClearRenderTarget(true, true, Color.clear);
             }
 

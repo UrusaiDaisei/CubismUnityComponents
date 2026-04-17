@@ -701,6 +701,7 @@ namespace Live2D.Cubism.Rendering.URP
 
                     controller.DidChangeSorting = false;
                     controller.DidChangeDrawableRenderOrder = false;
+                    controller.transform.hasChanged = false;
                 }
 
                 CubismRenderControllerGroup.GetInstance().DidChangeSortingRenderControllerGroup = false;

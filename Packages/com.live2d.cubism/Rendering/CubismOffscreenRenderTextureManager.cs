@@ -235,7 +235,9 @@ namespace Live2D.Cubism.Rendering
                     continue;
                 }
 
+                CubismRenderDiagnostics.CountRenderTargetBind();
                 commandBuffer.SetRenderTarget(_offscreenRenderTextureContainers[i].RenderTexture);
+                CubismRenderDiagnostics.CountClearRenderTarget();
                 commandBuffer.ClearRenderTarget(true, true, Color.clear);
             }
         }

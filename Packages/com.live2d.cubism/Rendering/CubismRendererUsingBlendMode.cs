@@ -289,6 +289,7 @@ namespace Live2D.Cubism.Rendering
             property.SetTexture(CubismShaderVariables.RenderTexture, passData.CommonTemporaryTextureHandle);
 
             MeshRenderer.SetPropertyBlock(property);
+            CubismRenderDiagnostics.CountPropertyBlockWrite();
         }
 
         /// <summary>
@@ -346,6 +347,98 @@ namespace Live2D.Cubism.Rendering
             property.SetFloat(CubismShaderVariables.ZOffset, _zOffset);
 
             MeshRenderer.SetPropertyBlock(property);
+            CubismRenderDiagnostics.CountPropertyBlockWrite();
+        }
+
+        /// <summary>
+        /// Applies drawable rendering properties in a single property block roundtrip.
+        /// This keeps existing behavior while reducing repeated Get/SetPropertyBlock churn.
+        /// </summary>
+        /// <param name="passData">Pass data containing render textures and camera data.</param>
+        private void ApplyDrawableProperties(ICubismRenderPassData passData)
+        {
+            // Render texture is only written when a current frame buffer exists, matching previous behavior.
+            if (RenderController?.CurrentFrameBuffer)
+            {
+                MarkDirty(DrawablePropertyDirtyFlags.RenderTexture);
+            }
+
+            if(transform.hasChanged || RenderController.transform?.hasChanged == true)
+            {
+                MarkDirty(DrawablePropertyDirtyFlags.Transforms);
+                transform.hasChanged = false;
+            }
+
+            if(!AnyDirty())
+                return;
+
+            var property = PropertyBlock;
+            MeshRenderer.GetPropertyBlock(property);
+            if(IsDirty(DrawablePropertyDirtyFlags.RenderTexture))
+            {
+                property.SetTexture(CubismShaderVariables.RenderTexture, passData.CommonTemporaryTextureHandle);
+            }
+
+            if (IsDirty(DrawablePropertyDirtyFlags.MainTexture))
+            {
+                property.SetTexture(CubismShaderVariables.MainTexture, MainTexture);
+            }
+
+            // Drawable blend colors.
+            if (IsDirty(DrawablePropertyDirtyFlags.ScreenColor))
+            {
+                property.SetColor(CubismShaderVariables.ScreenColor, ScreenColor);
+            }
+
+            if (IsDirty(DrawablePropertyDirtyFlags.MultiplyColor))
+            {
+                property.SetColor(CubismShaderVariables.MultiplyColor, MultiplyColor);
+            }
+
+            if(IsDirty(DrawablePropertyDirtyFlags.Transforms)){
+                var rt = RenderController.transform;
+                var t = transform;
+
+                var rtLocalPosition = rt.localPosition;
+                var rtLocalScale = rt.localScale;
+                var tLocalPosition = t.localPosition;
+                var tLocalScale = t.localScale;
+
+                 // Transform properties.
+                var offsetScale = _offsetScale;
+                offsetScale.Set(
+                    rtLocalPosition.x + tLocalPosition.x,
+                    rtLocalPosition.y + tLocalPosition.y,
+                    rtLocalScale.x * tLocalScale.x,
+                    rtLocalScale.y * tLocalScale.y);
+                _offsetScale = offsetScale;
+                property.SetVector(CubismShaderVariables.OffsetScale, _offsetScale);
+
+                var combinedRotation = rt.localRotation * t.localRotation;
+                _quaternion.Set(combinedRotation.x, combinedRotation.y, combinedRotation.z, combinedRotation.w);
+                property.SetVector(CubismShaderVariables.RotationQuaternion, _quaternion);
+
+                _zOffset = rtLocalPosition.z + tLocalPosition.z;
+                property.SetFloat(CubismShaderVariables.ZOffset, _zOffset);
+            }
+
+            MeshRenderer.SetPropertyBlock(property);
+            ClearDirty();
+            CubismRenderDiagnostics.CountPropertyBlockWrite();
+        }
+
+        /// <summary>
+        /// Refreshes vertex colors only when drawable color/opacity changed since the last draw submission.
+        /// </summary>
+        private void EnsureVertexColorsUpToDateForDraw()
+        {
+            if(!_vertexColorsIsDirty)
+            {
+                return;
+            }
+
+            ApplyVertexColors();
+            _vertexColorsIsDirty = false;
         }
 
         /// <summary>
@@ -363,8 +456,10 @@ namespace Live2D.Cubism.Rendering
             OffscreenFrameBuffer = CubismOffscreenRenderTextureManager.GetInstance().GetOffscreenRenderTexture(passData.CommonRenderingTextureHandle);
 
             // Set current frame buffer to offscreen frame buffer.
+            CubismRenderDiagnostics.CountRenderTargetBind();
             buffer.SetRenderTarget(OffscreenFrameBuffer);
             // Clear the offscreen frame buffer.
+            CubismRenderDiagnostics.CountClearRenderTarget();
             buffer.ClearRenderTarget(false, true, Color.clear);
 
             // Set up for drawing to offscreen.
@@ -477,7 +572,9 @@ namespace Live2D.Cubism.Rendering
             {
                 var maskTexture = passData.MaskTextureHandle;
 
+                CubismRenderDiagnostics.CountRenderTargetBind();
                 buffer.SetRenderTarget(maskTexture);
+                CubismRenderDiagnostics.CountClearRenderTarget();
                 buffer.ClearRenderTarget(true, true, Color.clear);
 
                 // Calculate mask transform.
@@ -504,6 +601,7 @@ namespace Live2D.Cubism.Rendering
                             mask.PropertyBlock.SetVector(CubismShaderVariables.MaskTransform, _maskTransform);
 
                             // Draw the mesh with the material.
+                            CubismRenderDiagnostics.CountDrawSubmission();
                             buffer.DrawMesh(
                                 mask.Mesh,
                                 Matrix4x4.identity,
@@ -519,6 +617,7 @@ namespace Live2D.Cubism.Rendering
                             mask.ApplyTransform();
 
                             // Draw the mesh with the material.
+                            CubismRenderDiagnostics.CountDrawSubmission();
                             buffer.DrawMesh(
                                 mask.Mesh,
                                 Matrix4x4.identity,
@@ -701,13 +800,11 @@ namespace Live2D.Cubism.Rendering
             // Mask rendering.
             DrawMasks(buffer, passData);
 
-            // Set property block.
-            ApplyMainTexture();
-            ApplyBlendedRenderTexture(passData);
-            ApplyScreenColor();
-            ApplyMultiplyColor();
-            ApplyVertexColors();
-            ApplyTransform();
+            // Avoid re-uploading vertex colors every draw when color/opacity is unchanged.
+            EnsureVertexColorsUpToDateForDraw();
+
+            // Apply drawable material/transform properties with one property block write.
+            ApplyDrawableProperties(passData);
 
             // In the case of color blending before Cubism 5.2.
             if ((ColorBlendType == BlendTypes.ColorBlend.Normal
@@ -725,21 +822,26 @@ namespace Live2D.Cubism.Rendering
                 }
 
                 // Set render target with depth buffer for proper depth testing
+                CubismRenderDiagnostics.CountRenderTargetBind();
                 buffer.SetRenderTarget(RenderController.CurrentFrameBuffer, passData.CameraDepthTextureHandle);
 
                 // Draw the mesh with the material.
+                CubismRenderDiagnostics.CountDrawSubmission();
                 buffer.DrawMesh(Mesh, Matrix4x4.identity, DrawMaterial ?? Material, 0, 0, PropertyBlock);
 
                 return;
             }
 
             // Blit to temporary texture.
+            CubismRenderDiagnostics.CountBlit();
             buffer.Blit(RenderController.CurrentFrameBuffer, passData.CommonTemporaryTextureHandle);
 
             // Set temporary render target.
+            CubismRenderDiagnostics.CountRenderTargetBind();
             buffer.SetRenderTarget(RenderController.CurrentFrameBuffer, passData.CameraDepthTextureHandle);
 
             // Draw the mesh with the material.
+            CubismRenderDiagnostics.CountDrawSubmission();
             buffer.DrawMesh(Mesh, Matrix4x4.identity, DrawMaterial ?? Material, 0, 0, PropertyBlock);
         }
 
@@ -781,23 +883,29 @@ namespace Live2D.Cubism.Rendering
                 || ColorBlendType == BlendTypes.ColorBlend.Add
                 || ColorBlendType == BlendTypes.ColorBlend.Multiply)
             {
+                CubismRenderDiagnostics.CountRenderTargetBind();
                 buffer.SetRenderTarget(previousOffscreen, passData.CameraDepthTextureHandle);
 
                 // Draw the mesh with the material.
+                CubismRenderDiagnostics.CountDrawSubmission();
                 buffer.DrawMesh(Mesh, Matrix4x4.identity, DrawMaterial ?? Material, 0, 0, PropertyBlock);
 
                 return;
             }
 
             // Set temporary render target.
+            CubismRenderDiagnostics.CountRenderTargetBind();
             buffer.SetRenderTarget(passData.CommonTemporaryTextureHandle, passData.CameraDepthTextureHandle);
             // Clear the render target.
+            CubismRenderDiagnostics.CountClearRenderTarget();
             buffer.ClearRenderTarget(false, true, Color.clear);
 
             // Draw the mesh with the material.
+            CubismRenderDiagnostics.CountDrawSubmission();
             buffer.DrawMesh(Mesh, Matrix4x4.identity, DrawMaterial ?? Material, 0, 0, PropertyBlock);
 
             // Blit to previous offscreen.
+            CubismRenderDiagnostics.CountBlit();
             buffer.Blit(passData.CommonTemporaryTextureHandle, previousOffscreen);
         }
 
@@ -821,6 +929,8 @@ namespace Live2D.Cubism.Rendering
             property.SetInt(CubismShaderVariables.ReversedZ, reversedZ);
 
             MeshRenderer.SetPropertyBlock(property);
+            CubismRenderDiagnostics.CountPropertyBlockWrite();
+            ClearDirty();
         }
 
         /// <summary>
@@ -840,6 +950,7 @@ namespace Live2D.Cubism.Rendering
             }
 
             MeshRenderer.SetPropertyBlock(PropertyBlock);
+            CubismRenderDiagnostics.CountPropertyBlockWrite();
         }
 
         /// <summary>
